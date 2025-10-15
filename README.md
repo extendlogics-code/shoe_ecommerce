@@ -25,6 +25,23 @@ npm run build
 
 > **Note:** Vite opens on http://localhost:5173 by default.
 
+## Git Workflow
+
+```bash
+# initialize tracking if this is a fresh checkout
+git init
+
+# stage and commit local changes
+git add .
+git commit -m "Your commit message"
+
+# point to the hosted repository (skip if already set)
+git remote add origin https://github.com/extendlogics-code/shoe_ecommerce.git
+
+# push your branch (replace master with your branch name if different)
+git push -u origin master
+```
+
 ## Project Structure
 
 - `src/App.tsx` – routing shell that wires all top-level pages together.
