@@ -1,0 +1,44 @@
+.new-products-page__section {
+  margin: 2rem 0;
+  padding-top: 2rem;
+  border-top: 1px solid #e5e5e5;
+}
+
+.new-products-page__section h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: #333;
+}
+
+.new-products-page__details-list,
+.new-products-page__care-list,
+.new-products-page__features-list {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0;
+}
+
+.new-products-page__details-list li,
+.new-products-page__care-list li,
+.new-products-page__features-list li {
+  position: relative;
+  padding-left: 1.5rem;
+  margin-bottom: 0.75rem;
+  line-height: 1.5;
+}
+
+.new-products-page__details-list li::before,
+.new-products-page__care-list li::before,
+.new-products-page__features-list li::before {
+  content: "•";
+  position: absolute;
+  left: 0;
+  color: #757575;
+}
+
+.new-products-page__section p {
+  line-height: 1.6;
+  color: #4a4a4a;
+  margin-bottom: 1rem;
+}

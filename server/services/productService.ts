@@ -9,10 +9,17 @@ export interface ProductRecord {
   price: number;
   currency: string;
   description: string | null;
+  productDetails: string[] | null;
+  productStory: string | null;
+  materialInfo: string | null;
+  careInstructions: string[] | null;
+  features: string[] | null;
   status: string;
   imagePath: string | null;
   colors: string[];
   sizes: string[];
+  category: string | null;
+  createdAt?: Date;
 }
 
 export const createProduct = async (input: ProductInput) => {
@@ -34,13 +41,19 @@ export const createProduct = async (input: ProductInput) => {
           sku,
           name,
           description,
+          product_details,
+          product_story,
+          material_info,
+          care_instructions,
+          features,
           price,
           currency,
           status,
           image_primary_path,
           image_primary_alt,
           colorways,
-          size_scale
+          size_scale,
+          category
         )
         VALUES (
           gen_random_uuid(),
@@ -53,21 +66,33 @@ export const createProduct = async (input: ProductInput) => {
           $7,
           $8,
           $9,
-          $10
+          $10,
+          $11,
+          $12,
+          $13,
+          $14,
+          $15,
+          $16
         )
-        RETURNING id, name, sku, price, currency, description, status, image_primary_path AS "imagePath", colorways AS "colors", size_scale AS "sizes"
+        RETURNING id, name, sku, price, currency, description, status, image_primary_path AS "imagePath", colorways AS "colors", size_scale AS "sizes", created_at AS "createdAt", product_details AS "productDetails", product_story AS "productStory", material_info AS "materialInfo", care_instructions AS "careInstructions", features, category
       `,
       [
         input.sku,
         input.name,
         input.description ?? null,
+        input.productDetails ?? [],
+        input.productStory ?? null,
+        input.materialInfo ?? null,
+        input.careInstructions ?? [],
+        input.features ?? [],
         input.price,
         currency,
         input.status ?? "active",
         input.imagePath ?? null,
         input.imageAlt ?? null,
         input.colors,
-        input.sizes
+        input.sizes,
+        input.category ?? null
       ]
     );
 
@@ -175,9 +200,16 @@ export const listProducts = async () => {
           p.currency,
           p.status,
           p.description,
+          p.product_details AS "productDetails",
+          p.product_story AS "productStory",
+          p.material_info AS "materialInfo",
+          p.care_instructions AS "careInstructions",
+          p.features,
           p.image_primary_path AS "imagePath",
           COALESCE(p.colorways, '{}'::text[]) AS "colors",
           COALESCE(p.size_scale, '{}'::text[]) AS "sizes",
+          p.category,
+          p.created_at AS "createdAt",
           i.on_hand AS "onHand",
           i.reserved AS "reserved",
           i.safety_stock AS "safetyStock",
@@ -186,6 +218,40 @@ export const listProducts = async () => {
         LEFT JOIN inventory_items i ON i.product_id = p.id
         ORDER BY p.created_at DESC
       `
+    );
+    return rows;
+  } finally {
+    client.release();
+  }
+};
+
+export const listRecentProducts = async (limit = 12) => {
+  const client = await getClient();
+  try {
+    const { rows } = await client.query(
+      `
+        SELECT
+          p.id,
+          p.name,
+          p.sku,
+          p.price,
+          p.currency,
+          p.status,
+          p.description,
+          p.image_primary_path AS "imagePath",
+          COALESCE(p.colorways, '{}'::text[]) AS "colors",
+          COALESCE(p.size_scale, '{}'::text[]) AS "sizes",
+          p.created_at AS "createdAt",
+          i.on_hand AS "onHand",
+          i.reserved AS "reserved",
+          i.safety_stock AS "safetyStock",
+          i.reorder_point AS "reorderPoint"
+        FROM products p
+        LEFT JOIN inventory_items i ON i.product_id = p.id
+        ORDER BY p.created_at DESC
+        LIMIT $1
+      `,
+      [limit]
     );
     return rows;
   } finally {
@@ -230,29 +296,41 @@ export const updateProduct = async (productId: string, input: ProductInput) => {
           sku = $2,
           name = $3,
           description = $4,
-          price = $5,
-          currency = $6,
-          status = $7,
-          image_primary_path = COALESCE($8, image_primary_path),
-          image_primary_alt = COALESCE($9, image_primary_alt),
-          colorways = $10,
-          size_scale = $11,
+          product_details = $5,
+          product_story = $6,
+          material_info = $7,
+          care_instructions = $8,
+          features = $9,
+          price = $10,
+          currency = $11,
+          status = $12,
+          image_primary_path = COALESCE($13, image_primary_path),
+          image_primary_alt = COALESCE($14, image_primary_alt),
+          colorways = $15,
+          size_scale = $16,
+          category = $17,
           updated_at = now()
         WHERE id = $1
-        RETURNING id, name, sku, price, currency, description, status, image_primary_path AS "imagePath", colorways AS "colors", size_scale AS "sizes"
+        RETURNING id, name, sku, price, currency, description, status, image_primary_path AS "imagePath", colorways AS "colors", size_scale AS "sizes", created_at AS "createdAt", product_details AS "productDetails", product_story AS "productStory", material_info AS "materialInfo", care_instructions AS "careInstructions", features, category
       `,
       [
         productId,
         input.sku,
         input.name,
         input.description ?? null,
+        input.productDetails ?? [],
+        input.productStory ?? null,
+        input.materialInfo ?? null,
+        input.careInstructions ?? [],
+        input.features ?? [],
         input.price,
         currency,
         input.status ?? "active",
         input.imagePath ?? null,
         input.imageAlt ?? null,
         input.colors,
-        input.sizes
+        input.sizes,
+        input.category ?? null
       ]
     );
 

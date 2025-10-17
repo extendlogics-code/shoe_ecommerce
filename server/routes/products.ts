@@ -3,7 +3,7 @@ import multer from "multer";
 import path from "node:path";
 import { appConfig } from "../config";
 import { ensureDirectory } from "../utils/fileSystem";
-import { createProduct, deleteProductById, listProducts, updateProduct } from "../services/productService";
+import { createProduct, deleteProductById, listProducts, listRecentProducts, updateProduct } from "../services/productService";
 
 const router = Router();
 
@@ -53,6 +53,17 @@ router.get("/", async (_req, res, next) => {
   }
 });
 
+router.get("/new", async (req, res, next) => {
+  try {
+    const limitParam = Number(req.query.limit ?? 12);
+    const limit = Number.isNaN(limitParam) ? 12 : Math.max(1, Math.min(limitParam, 50));
+    const products = await listRecentProducts(limit);
+    res.json(products);
+  } catch (error) {
+    next(error);
+  }
+});
+
 const parseCsv = (value?: string | string[]): string[] => {
   if (!value) {
     return [];
@@ -77,8 +88,26 @@ router.post("/", upload.single("image"), async (req, res, next) => {
   }
 
   try {
-    const { name, sku, description, price, currency, inventoryOnHand, inventoryReserved, safetyStock, reorderPoint, imageAlt, colors, sizes } =
-      req.body;
+    const { 
+      name, 
+      sku, 
+      description, 
+      productDetails,
+      productStory,
+      materialInfo,
+      careInstructions,
+      features,
+      price, 
+      currency, 
+      inventoryOnHand, 
+      inventoryReserved, 
+      safetyStock, 
+      reorderPoint, 
+      imageAlt, 
+      colors, 
+      sizes, 
+      category 
+    } = req.body;
 
     const priceValue = Number(price);
     if (Number.isNaN(priceValue)) {
@@ -86,13 +115,24 @@ router.post("/", upload.single("image"), async (req, res, next) => {
       return;
     }
 
+    if (category && !['mens', 'womens', 'kids'].includes(category)) {
+      res.status(400).json({ message: "Invalid category value. Must be one of: mens, womens, kids" });
+      return;
+    }
+
     const product = await createProduct({
       name,
       sku,
       description,
+      productDetails: productDetails ? JSON.parse(productDetails) : undefined,
+      productStory: productStory ?? undefined,
+      materialInfo: materialInfo ?? undefined,
+      careInstructions: careInstructions ? JSON.parse(careInstructions) : undefined,
+      features: features ? JSON.parse(features) : undefined,
       price: priceValue,
       currency: currency ?? undefined,
       status: "active",
+      category: category ?? undefined,
       colors: parseCsv(colors),
       sizes: parseCsv(sizes),
       inventory: {
@@ -134,9 +174,15 @@ router.put("/:productId", upload.single("image"), async (req, res, next) => {
       name,
       sku,
       description,
+      productDetails,
+      productStory,
+      materialInfo,
+      careInstructions,
+      features,
       price,
       currency,
       status,
+      category,
       inventoryOnHand,
       inventoryReserved,
       safetyStock,
@@ -152,13 +198,24 @@ router.put("/:productId", upload.single("image"), async (req, res, next) => {
       return;
     }
 
+    if (category && !['mens', 'womens', 'kids'].includes(category)) {
+      res.status(400).json({ message: "Invalid category value. Must be one of: mens, womens, kids" });
+      return;
+    }
+
     const product = await updateProduct(req.params.productId, {
       name,
       sku,
       description,
+      productDetails: productDetails ? JSON.parse(productDetails) : undefined,
+      productStory: productStory ?? undefined,
+      materialInfo: materialInfo ?? undefined,
+      careInstructions: careInstructions ? JSON.parse(careInstructions) : undefined,
+      features: features ? JSON.parse(features) : undefined,
       price: priceValue,
       currency: currency ?? undefined,
       status: status ?? "active",
+      category: category ?? undefined,
       colors: parseCsv(colors),
       sizes: parseCsv(sizes),
       inventory: {

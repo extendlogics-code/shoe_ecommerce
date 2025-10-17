@@ -6,7 +6,7 @@ export type PrimaryNavItem = {
 };
 
 export const primaryNav: PrimaryNavItem[] = [
-  { label: "New Arrivals", categoryId: "women" },
+  { label: "New Products", path: "/new-products" },
   { label: "Women", categoryId: "women" },
   { label: "Men", categoryId: "men" },
   { label: "Kids", categoryId: "kids" },

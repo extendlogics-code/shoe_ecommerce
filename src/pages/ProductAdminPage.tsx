@@ -10,6 +10,11 @@ type ProductRow = {
   currency: string;
   status: string;
   description: string | null;
+  productDetails: string[] | null;
+  productStory: string | null;
+  materialInfo: string | null;
+  careInstructions: string[] | null;
+  features: string[] | null;
   imagePath: string | null;
   colors: string[];
   sizes: string[];
@@ -17,6 +22,7 @@ type ProductRow = {
   reserved: number;
   safetyStock: number;
   reorderPoint: number;
+  category: string | null;
 };
 
 type FormState = {
@@ -25,6 +31,11 @@ type FormState = {
   price: string;
   currency: string;
   description: string;
+  productDetails: string;
+  productStory: string;
+  materialInfo: string;
+  careInstructions: string;
+  features: string;
   onHand: string;
   reserved: string;
   safetyStock: string;
@@ -32,6 +43,7 @@ type FormState = {
   imageAlt: string;
   colors: string;
   sizes: string;
+  category: string;
   file?: File;
 };
 
@@ -41,13 +53,19 @@ const initialFormState: FormState = {
   price: "",
   currency: "INR",
   description: "",
+  productDetails: "",
+  productStory: "",
+  materialInfo: "",
+  careInstructions: "",
+  features: "",
   onHand: "0",
   reserved: "0",
   safetyStock: "",
   reorderPoint: "",
   imageAlt: "",
   colors: "",
-  sizes: ""
+  sizes: "",
+  category: ""
 };
 
 const ProductAdminPage = () => {
@@ -127,7 +145,7 @@ const ProductAdminPage = () => {
     return { totalActive, totalStock, belowReorder };
   }, [products]);
 
-  const handleInputChange = (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleInputChange = (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const target = event.currentTarget;
     const { name, value } = target;
 
@@ -184,6 +202,9 @@ const ProductAdminPage = () => {
       formData.append("inventoryOnHand", form.onHand);
       formData.append("inventoryReserved", form.reserved || "0");
       formData.append("status", isEditingProduct ? editingProductStatus : "active");
+      if (form.category) {
+        formData.append("category", form.category);
+      }
       if (form.safetyStock) {
         formData.append("safetyStock", form.safetyStock);
       }
@@ -198,6 +219,21 @@ const ProductAdminPage = () => {
       }
       if (form.sizes) {
         formData.append("sizes", form.sizes);
+      }
+      if (form.productDetails) {
+        formData.append("productDetails", JSON.stringify(form.productDetails.split("\n").filter(line => line.trim())));
+      }
+      if (form.productStory) {
+        formData.append("productStory", form.productStory);
+      }
+      if (form.materialInfo) {
+        formData.append("materialInfo", form.materialInfo);
+      }
+      if (form.careInstructions) {
+        formData.append("careInstructions", JSON.stringify(form.careInstructions.split("\n").filter(line => line.trim())));
+      }
+      if (form.features) {
+        formData.append("features", JSON.stringify(form.features.split("\n").filter(line => line.trim())));
       }
       if (form.file) {
         formData.append("image", form.file);
@@ -296,6 +332,11 @@ const ProductAdminPage = () => {
         price: String(product.price),
         currency: product.currency,
         description: product.description ?? "",
+        productDetails: product.productDetails?.join("\n") ?? "",
+        productStory: product.productStory ?? "",
+        materialInfo: product.materialInfo ?? "",
+        careInstructions: product.careInstructions?.join("\n") ?? "",
+        features: product.features?.join("\n") ?? "",
         onHand: String(product.onHand ?? 0),
         reserved: product.reserved !== null && product.reserved !== undefined ? String(product.reserved) : "0",
         safetyStock:
@@ -305,6 +346,7 @@ const ProductAdminPage = () => {
         imageAlt: "",
         colors: product.colors?.length ? product.colors.join(", ") : "",
         sizes: product.sizes?.length ? product.sizes.join(", ") : "",
+        category: product.category ?? "",
         file: undefined
       });
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -456,11 +498,11 @@ const ProductAdminPage = () => {
                 <label htmlFor="sku">SKU</label>
                 <input id="sku" name="sku" required value={form.sku} onChange={handleInputChange} />
               </div>
-              <div className="admin-form__grid">
-                <div className="admin-form__row">
-                  <label htmlFor="price">Price</label>
-                  <input
-                    id="price"
+            <div className="admin-form__grid">
+              <div className="admin-form__row">
+                <label htmlFor="price">Price</label>
+                <input
+                  id="price"
                     name="price"
                     required
                     type="number"
@@ -471,21 +513,32 @@ const ProductAdminPage = () => {
                   />
                 </div>
                 <div className="admin-form__row">
-                  <label htmlFor="currency">Currency</label>
-                  <input id="currency" name="currency" value={form.currency} onChange={handleInputChange} />
-                </div>
-                <div className="admin-form__row">
-                  <label htmlFor="onHand">Starting stock</label>
+                <label htmlFor="currency">Currency</label>
+                <input id="currency" name="currency" value={form.currency} onChange={handleInputChange} />
+              </div>
+              <div className="admin-form__row">
+                <label htmlFor="onHand">Starting stock</label>
                   <input
                     id="onHand"
                     name="onHand"
                     type="number"
                     min="0"
-                    value={form.onHand}
-                    onChange={handleInputChange}
-                  />
-                </div>
+                  value={form.onHand}
+                  onChange={handleInputChange}
+                />
               </div>
+              <div className="admin-form__row">
+                <label htmlFor="reserved">Reserved stock</label>
+                <input
+                  id="reserved"
+                  name="reserved"
+                  type="number"
+                  min="0"
+                  value={form.reserved}
+                  onChange={handleInputChange}
+                />
+              </div>
+            </div>
               <div className="admin-form__grid">
                 <div className="admin-form__row">
                   <label htmlFor="safetyStock">Safety stock</label>
@@ -509,15 +562,98 @@ const ProductAdminPage = () => {
                     onChange={handleInputChange}
                   />
                 </div>
+                <div className="admin-form__row">
+                  <label htmlFor="category">Category</label>
+                  <select
+                    id="category"
+                    name="category"
+                    value={form.category}
+                    onChange={handleInputChange}
+                    required
+                  >
+                    <option value="">Select a category</option>
+                    <option value="mens">Men's</option>
+                    <option value="womens">Women's</option>
+                    <option value="kids">Kids</option>
+                  </select>
+                </div>
               </div>
               <div className="admin-form__row">
-                <label htmlFor="description">Description</label>
+                <label htmlFor="description">Short Description</label>
                 <textarea
                   id="description"
                   name="description"
                   rows={3}
                   value={form.description}
                   onChange={handleInputChange}
+                  placeholder="Brief product overview that appears in listings"
+                />
+              </div>
+              <div className="admin-form__row">
+                <label htmlFor="productStory">Product Story</label>
+                <textarea
+                  id="productStory"
+                  name="productStory"
+                  rows={4}
+                  value={form.productStory}
+                  onChange={handleInputChange}
+                  placeholder="Tell the story behind this product..."
+                />
+              </div>
+              <div className="admin-form__row">
+                <label htmlFor="productDetails">Product Details (One per line)</label>
+                <textarea
+                  id="productDetails"
+                  name="productDetails"
+                  rows={5}
+                  value={form.productDetails}
+                  onChange={handleInputChange}
+                  placeholder="Enter product details, one per line
+Example:
+Lace closure
+Synthetic upper
+Rubber outsole"
+                />
+              </div>
+              <div className="admin-form__row">
+                <label htmlFor="materialInfo">Material Information</label>
+                <textarea
+                  id="materialInfo"
+                  name="materialInfo"
+                  rows={3}
+                  value={form.materialInfo}
+                  onChange={handleInputChange}
+                  placeholder="Describe the materials used in the product..."
+                />
+              </div>
+              <div className="admin-form__row">
+                <label htmlFor="careInstructions">Care Instructions (One per line)</label>
+                <textarea
+                  id="careInstructions"
+                  name="careInstructions"
+                  rows={4}
+                  value={form.careInstructions}
+                  onChange={handleInputChange}
+                  placeholder="Enter care instructions, one per line
+Example:
+Wipe with a clean, dry cloth
+Store in a cool, dry place
+Do not machine wash"
+                />
+              </div>
+              <div className="admin-form__row">
+                <label htmlFor="features">Key Features (One per line)</label>
+                <textarea
+                  id="features"
+                  name="features"
+                  rows={4}
+                  value={form.features}
+                  onChange={handleInputChange}
+                  placeholder="Enter key features, one per line
+Example:
+Cushioned insole for comfort
+Breathable mesh lining
+Durable rubber outsole"
                 />
               </div>
               <div className="admin-form__row">
@@ -615,8 +751,11 @@ const ProductAdminPage = () => {
                         <strong>{formatCurrency(product.price, product.currency)}</strong>
                       </div>
                     </td>
-                    <td>
+                      <td>
                       <div className="admin-table__primary">
+                        <span className="admin-table__muted">
+                          Category: {product.category ? product.category.charAt(0).toUpperCase() + product.category.slice(1) : "—"}
+                        </span>
                         <span className="admin-table__muted">
                           Colors: {product.colors?.length ? product.colors.join(", ") : "—"}
                         </span>
