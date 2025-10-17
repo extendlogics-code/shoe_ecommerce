@@ -39,13 +39,13 @@ const ProductRail = ({ id, title, subtitle, products, eyebrow, ctaLabel }: Props
             >
               <figure className="product-card__media">
                 {product.badge && <span className="badge">{product.badge}</span>}
-                <Link to={`/products/${product.id}`}>
+                <Link to={product.href ?? `/products/${product.id}`}>
                   <img src={product.image} alt={product.name} loading="lazy" />
                 </Link>
               </figure>
               <div className="product-card__info">
                 <div>
-                  <Link to={`/products/${product.id}`}>
+                  <Link to={product.href ?? `/products/${product.id}`}>
                     <h3>{product.name}</h3>
                   </Link>
                   <p>{product.categoryLabel}</p>

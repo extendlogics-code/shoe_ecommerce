@@ -1984,6 +1984,12 @@ button {
   align-items: center;
   margin-top: 8px;
 }
+.admin-viewer-note {
+  display: grid;
+  gap: 12px;
+  line-height: 1.6;
+  color: var(--color-muted);
+}
 
 .admin-access-card {
   display: grid;
@@ -2067,6 +2073,9 @@ button {
   margin: 0 auto;
   gap: clamp(24px, 4vw, 48px);
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.admin-grid--catalog {
+  grid-template-columns: 1fr;
 }
 
 .admin-card {

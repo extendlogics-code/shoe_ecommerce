@@ -43,7 +43,9 @@ export type Product = {
   badge?: string;
 };
 
-export type ProductSummary = Pick<Product, "id" | "name" | "price" | "image" | "badge" | "colors" | "categoryLabel">;
+export type ProductSummary = Pick<Product, "id" | "name" | "price" | "image" | "badge" | "colors" | "categoryLabel"> & {
+  href?: string;
+};
 
 export const collectionCards: CollectionCard[] = [
   {

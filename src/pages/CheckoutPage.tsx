@@ -50,6 +50,7 @@ const CheckoutPage = () => {
   const [transactionModalOpen, setTransactionModalOpen] = useState(false);
   const [transactionInput, setTransactionInput] = useState("");
   const [transactionError, setTransactionError] = useState<string | null>(null);
+  const [orderSubmitting, setOrderSubmitting] = useState(false);
 
   const taxEstimate = useMemo(() => Math.round(subtotal * 0.08 * 100) / 100, [subtotal]);
   const orderTotal = subtotal + taxEstimate;
@@ -126,14 +127,18 @@ const CheckoutPage = () => {
     setPendingOrder(null);
     setTransactionInput("");
     setTransactionError(null);
+    setOrderSubmitting(false);
   };
 
-  const handleConfirmTransaction = () => {
+  const handleConfirmTransaction = async () => {
     if (!pendingOrder) {
       return;
     }
     if (!transactionInput.trim()) {
       setTransactionError("Transaction ID is required.");
+      return;
+    }
+    if (orderSubmitting) {
       return;
     }
 
@@ -142,11 +147,116 @@ const CheckoutPage = () => {
       transactionId: transactionInput.trim()
     };
 
-    setOrderDetails(completedOrder);
-    setPendingOrder(null);
-    setTransactionModalOpen(false);
-    setForm(initialForm);
-    clearCart();
+    setOrderSubmitting(true);
+    setTransactionError(null);
+
+    try {
+      const catalogResponse = await fetch("/api/products");
+      const catalog: Array<{
+        id: string;
+        sku: string;
+        name: string;
+        price: number;
+        currency: string;
+        status: string;
+        imagePath: string | null;
+        colors: string[];
+      }> = catalogResponse.ok ? await catalogResponse.json() : [];
+
+      const bySku = new Map(catalog.map((product) => [product.sku, product]));
+      const byId = new Map(catalog.map((product) => [product.id, product]));
+
+      const itemsPayload = pendingOrder.items.map((item) => {
+        const product =
+          bySku.get(item.id) ||
+          byId.get(item.id) ||
+          catalog.find((entry) => entry.name.trim().toLowerCase() === item.name.trim().toLowerCase());
+        if (!product) {
+          throw new Error(`Product "${item.name}" could not be matched with the live catalogue.`);
+        }
+        return {
+          productId: product.id,
+          sku: product.sku,
+          quantity: item.quantity,
+          unitPrice: item.price,
+          discount: 0,
+          tax: 0
+        };
+      });
+
+      const nameParts = completedOrder.form.fullName.trim().split(/\s+/).filter(Boolean);
+      const firstName = nameParts.shift() ?? "Guest";
+      const lastName = nameParts.join(" ") || "Shopper";
+
+      const shippingAddress = {
+        line1: completedOrder.form.addressLine,
+        line2: "",
+        city: completedOrder.form.city,
+        state: completedOrder.form.state,
+        postalCode: "000000",
+        country: "IN"
+      };
+
+      const orderPayload = {
+        orderNumber: completedOrder.id,
+        transactionId: completedOrder.transactionId,
+        channel: "web",
+        currency: "INR",
+        customer: {
+          firstName,
+          lastName,
+          email: completedOrder.form.email,
+          phone: completedOrder.form.phone
+        },
+        shippingAddress,
+        billingAddress: shippingAddress,
+        items: itemsPayload,
+        totalAmount: orderTotal,
+        status: "processing"
+      };
+
+      const response = await fetch("/api/orders", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(orderPayload)
+      });
+
+      if (!response.ok) {
+        let reason = "Unable to save order.";
+        try {
+          const payload = (await response.json()) as { message?: string };
+          reason = payload.message ?? reason;
+        } catch {
+          // ignore JSON parsing failures
+        }
+        throw new Error(reason);
+      }
+
+      const createdOrder = (await response.json()) as { id: string; transactionId: string };
+
+      await fetch(`/api/orders/transaction/${encodeURIComponent(completedOrder.transactionId)}/invoices`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        }
+      }).catch(() => {
+        // ignore invoice generation errors and attempt download regardless
+      });
+
+      window.open(`/api/orders/${createdOrder.id}/invoice`, "_blank", "noopener,noreferrer");
+
+      setOrderDetails(completedOrder);
+      setPendingOrder(null);
+      setTransactionModalOpen(false);
+      setForm(initialForm);
+      clearCart();
+    } catch (err) {
+      setTransactionError(err instanceof Error ? err.message : "Unable to save order.");
+    } finally {
+      setOrderSubmitting(false);
+    }
   };
 
   const handleTransactionInput = (event: ChangeEvent<HTMLInputElement>) => {
@@ -364,8 +474,13 @@ const CheckoutPage = () => {
               <button type="button" className="button button--dark" onClick={handleCloseTransactionModal}>
                 Cancel
               </button>
-              <button type="button" className="button button--primary" onClick={handleConfirmTransaction}>
-                Complete order
+              <button
+                type="button"
+                className="button button--primary"
+                onClick={handleConfirmTransaction}
+                disabled={orderSubmitting}
+              >
+                {orderSubmitting ? "Completing…" : "Complete order"}
               </button>
             </div>
           </div>

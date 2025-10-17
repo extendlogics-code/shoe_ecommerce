@@ -26,6 +26,7 @@ type FormState = {
   currency: string;
   description: string;
   onHand: string;
+  reserved: string;
   safetyStock: string;
   reorderPoint: string;
   imageAlt: string;
@@ -41,6 +42,7 @@ const initialFormState: FormState = {
   currency: "INR",
   description: "",
   onHand: "0",
+  reserved: "0",
   safetyStock: "",
   reorderPoint: "",
   imageAlt: "",
@@ -180,6 +182,7 @@ const ProductAdminPage = () => {
       formData.append("currency", form.currency);
       formData.append("description", form.description);
       formData.append("inventoryOnHand", form.onHand);
+      formData.append("inventoryReserved", form.reserved || "0");
       formData.append("status", isEditingProduct ? editingProductStatus : "active");
       if (form.safetyStock) {
         formData.append("safetyStock", form.safetyStock);
@@ -246,9 +249,9 @@ const ProductAdminPage = () => {
         setError(null);
         setMessage(null);
         if (productId === editingProductId) {
-          setForm({ ...initialFormState });
-          setEditingProductId(null);
-          setEditingProductStatus("active");
+      setForm({ ...initialFormState });
+      setEditingProductId(null);
+      setEditingProductStatus("active");
         }
         const response = await fetch(`/api/products/${productId}`, {
           method: "DELETE",
@@ -294,6 +297,7 @@ const ProductAdminPage = () => {
         currency: product.currency,
         description: product.description ?? "",
         onHand: String(product.onHand ?? 0),
+        reserved: product.reserved !== null && product.reserved !== undefined ? String(product.reserved) : "0",
         safetyStock:
           product.safetyStock !== null && product.safetyStock !== undefined ? String(product.safetyStock) : "",
         reorderPoint:

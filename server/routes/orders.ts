@@ -83,10 +83,6 @@ const parseItems = (items: unknown): OrderItemInput[] => {
 };
 
 router.post("/", async (req, res, next) => {
-  if (!ensureSuperadmin(req, res)) {
-    return;
-  }
-
   try {
     const payload = req.body as Partial<OrderCreateInput>;
 
@@ -136,10 +132,6 @@ router.post("/", async (req, res, next) => {
 });
 
 router.post("/transaction/:transactionId/invoices", async (req, res, next) => {
-  if (!ensureSuperadmin(req, res)) {
-    return;
-  }
-
   try {
     const order = await upsertInvoiceByTransaction(req.params.transactionId);
     res.status(201).json(order.invoice);

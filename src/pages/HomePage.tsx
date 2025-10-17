@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import HeroCarousel from "../components/HeroCarousel";
 import HighlightsBar from "../components/HighlightsBar";
 import CollectionGrid from "../components/CollectionGrid";
@@ -5,7 +6,34 @@ import ProductRail from "../components/ProductRail";
 import BrandTicker from "../components/BrandTicker";
 import StoryGrid from "../components/StoryGrid";
 import NewsletterBanner from "../components/NewsletterBanner";
-import { collectionCards, featuredProducts, newArrivals } from "../data/products";
+import { collectionCards, featuredProducts, newArrivals, type ProductSummary } from "../data/products";
+import { formatCurrency } from "../utils/currency";
+
+type ApiProduct = {
+  id: string;
+  sku: string;
+  name: string;
+  price: number;
+  currency: string;
+  status: string;
+  imagePath: string | null;
+  colors: string[];
+};
+
+type ApiOrder = {
+  id: string;
+  status: string;
+  placedAt: string;
+  items: Array<{
+    id: string;
+    productId: string;
+    sku: string;
+    productName: string;
+    unitPrice: number;
+    quantity: number;
+    imagePath: string | null;
+  }>;
+};
 
 const HomePage = () => {
   return (
