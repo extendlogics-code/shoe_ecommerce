@@ -6,6 +6,9 @@ import ProductsPage from "./pages/ProductsPage";
 import ProductDetailPage from "./pages/ProductDetailPage";
 import CartPage from "./pages/CartPage";
 import CheckoutPage from "./pages/CheckoutPage";
+import OrdersDashboardPage from "./pages/OrdersDashboardPage";
+import ProductAdminPage from "./pages/ProductAdminPage";
+import AdminLoginPage from "./pages/AdminLoginPage";
 import { CartProvider } from "./context/CartContext";
 
 const App = () => {
@@ -20,6 +23,9 @@ const App = () => {
             <Route path="/products/:productId" element={<ProductDetailPage />} />
             <Route path="/cart" element={<CartPage />} />
             <Route path="/checkout" element={<CheckoutPage />} />
+            <Route path="/admin/login" element={<AdminLoginPage />} />
+            <Route path="/admin/orders" element={<OrdersDashboardPage />} />
+            <Route path="/admin/catalog" element={<ProductAdminPage />} />
             <Route path="*" element={<HomePage />} />
           </Routes>
           <Footer />

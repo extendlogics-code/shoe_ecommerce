@@ -71,7 +71,15 @@ const Header = () => {
           <button type="button" className="header__icon-btn" aria-label="Search Kalaa shoes">
             <IconSearch size={20} stroke={1.8} />
           </button>
-          <button type="button" className="header__icon-btn" aria-label="Account">
+          <button
+            type="button"
+            className="header__icon-btn"
+            aria-label="Account"
+            onClick={() => {
+              setIsMenuOpen(false);
+              navigate("/admin/login");
+            }}
+          >
             <IconUser size={20} stroke={1.8} />
           </button>
           <Link to="/cart" className="header__bag" aria-label="Shopping bag" onClick={() => setIsMenuOpen(false)}>
