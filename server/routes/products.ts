@@ -3,7 +3,7 @@ import multer from "multer";
 import path from "node:path";
 import { appConfig } from "../config";
 import { ensureDirectory } from "../utils/fileSystem";
-import { createProduct, deleteProductById, listProducts } from "../services/productService";
+import { createProduct, deleteProductById, listProducts, updateProduct } from "../services/productService";
 
 const router = Router();
 
@@ -119,6 +119,59 @@ router.delete("/:productId", async (req, res, next) => {
   try {
     await deleteProductById(req.params.productId);
     res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.put("/:productId", upload.single("image"), async (req, res, next) => {
+  if (!ensureSuperadmin(req, res)) {
+    return;
+  }
+
+  try {
+    const {
+      name,
+      sku,
+      description,
+      price,
+      currency,
+      status,
+      inventoryOnHand,
+      inventoryReserved,
+      safetyStock,
+      reorderPoint,
+      imageAlt,
+      colors,
+      sizes
+    } = req.body;
+
+    const priceValue = Number(price);
+    if (Number.isNaN(priceValue)) {
+      res.status(400).json({ message: "Price must be numeric" });
+      return;
+    }
+
+    const product = await updateProduct(req.params.productId, {
+      name,
+      sku,
+      description,
+      price: priceValue,
+      currency: currency ?? undefined,
+      status: status ?? "active",
+      colors: parseCsv(colors),
+      sizes: parseCsv(sizes),
+      inventory: {
+        onHand: Number(inventoryOnHand ?? 0),
+        reserved: Number(inventoryReserved ?? 0),
+        safetyStock: Number.isNaN(Number(safetyStock)) ? undefined : Number(safetyStock),
+        reorderPoint: Number.isNaN(Number(reorderPoint)) ? undefined : Number(reorderPoint)
+      },
+      imagePath: req.file ? path.relative(process.cwd(), req.file.path) : undefined,
+      imageAlt: imageAlt ?? undefined
+    });
+
+    res.json(product);
   } catch (error) {
     next(error);
   }

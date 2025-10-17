@@ -24,6 +24,33 @@ router.post("/login", async (req, res, next) => {
   }
 });
 
+router.post("/register", async (req, res, next) => {
+  const { email, password } = req.body as { email?: unknown; password?: unknown };
+
+  if (typeof email !== "string" || typeof password !== "string") {
+    res.status(400).json({ message: "Email and password are required" });
+    return;
+  }
+
+  if (password.length < 8) {
+    res.status(400).json({ message: "Password must be at least 8 characters" });
+    return;
+  }
+
+  try {
+    const admin = await createAdminUser({ email, password, role: "viewer" });
+    res
+      .status(201)
+      .json({ message: "Registration successful", admin: { id: admin.id, email: admin.email, role: admin.role } });
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("already exists")) {
+      res.status(409).json({ message: error.message });
+      return;
+    }
+    next(error);
+  }
+});
+
 router.post("/users", async (req, res, next) => {
   const { creatorEmail, creatorPassword, email, password, role } = req.body as {
     creatorEmail?: unknown;

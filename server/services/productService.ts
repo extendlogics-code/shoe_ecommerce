@@ -209,3 +209,84 @@ export const deleteProductById = async (productId: string) => {
     client.release();
   }
 };
+
+export const updateProduct = async (productId: string, input: ProductInput) => {
+  const client = await getClient();
+  const currency = input.currency ?? appConfig.defaultCurrency;
+  const reserved = input.inventory.reserved ?? 0;
+  const safetyStock = input.inventory.safetyStock ?? 0;
+  const reorderPoint = input.inventory.reorderPoint ?? Math.max(
+    Math.round(input.inventory.onHand * 0.25),
+    1
+  );
+
+  try {
+    await client.query("BEGIN");
+
+    const updateResult = await client.query<ProductRecord>(
+      `
+        UPDATE products
+        SET
+          sku = $2,
+          name = $3,
+          description = $4,
+          price = $5,
+          currency = $6,
+          status = $7,
+          image_primary_path = COALESCE($8, image_primary_path),
+          image_primary_alt = COALESCE($9, image_primary_alt),
+          colorways = $10,
+          size_scale = $11,
+          updated_at = now()
+        WHERE id = $1
+        RETURNING id, name, sku, price, currency, description, status, image_primary_path AS "imagePath", colorways AS "colors", size_scale AS "sizes"
+      `,
+      [
+        productId,
+        input.sku,
+        input.name,
+        input.description ?? null,
+        input.price,
+        currency,
+        input.status ?? "active",
+        input.imagePath ?? null,
+        input.imageAlt ?? null,
+        input.colors,
+        input.sizes
+      ]
+    );
+
+    if (updateResult.rowCount === 0) {
+      throw new Error("Product not found");
+    }
+
+    await client.query(
+      `
+        INSERT INTO inventory_items (
+          product_id,
+          on_hand,
+          reserved,
+          safety_stock,
+          reorder_point
+        )
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (product_id)
+        DO UPDATE SET
+          on_hand = EXCLUDED.on_hand,
+          reserved = EXCLUDED.reserved,
+          safety_stock = EXCLUDED.safety_stock,
+          reorder_point = EXCLUDED.reorder_point,
+          updated_at = now()
+      `,
+      [productId, input.inventory.onHand, reserved, safetyStock, reorderPoint]
+    );
+
+    await client.query("COMMIT");
+    return updateResult.rows[0];
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+};

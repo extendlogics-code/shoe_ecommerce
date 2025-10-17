@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { formatCurrency } from "../utils/currency";
 
 type OrderItem = {
@@ -132,6 +132,7 @@ const OrdersDashboardPage = () => {
   }, [loadOrders, navigate]);
 
   const isSuperAdmin = role === "superadmin";
+  const roleResolved = role !== null;
 
   const metrics = useMemo(() => {
     if (!orders.length) {
@@ -201,8 +202,8 @@ const OrdersDashboardPage = () => {
         <div className="admin-shell__user">
           <div>
             <span className="admin-shell__user-label">Signed in as</span>
-            <strong>{adminEmail ?? "Viewer access"}</strong>
-            <span className="admin-shell__user-role">{isSuperAdmin ? "Superadmin" : "Viewer"}</span>
+            <strong>{roleResolved ? adminEmail ?? "Viewer access" : "Verifying…"}</strong>
+            <span className="admin-shell__user-role">{roleResolved ? (isSuperAdmin ? "Superadmin" : "Viewer") : "Checking"}</span>
           </div>
           <button className="button button--ghost" type="button" onClick={handleLogout}>
             Log out
@@ -224,10 +225,13 @@ const OrdersDashboardPage = () => {
             </div>
           </div>
         ) : null}
+        <Link className="button button--ghost" to="/admin">
+          Back
+        </Link>
       </header>
 
       {error ? <div className="admin-alert admin-alert--error">{error}</div> : null}
-      {!isSuperAdmin ? (
+      {roleResolved && !isSuperAdmin ? (
         <div className="admin-alert admin-alert--info">
           You&apos;re browsing with view-only access. Superadmins can elevate permissions from the catalog workspace.
         </div>
