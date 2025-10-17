@@ -367,7 +367,7 @@ const OrdersDashboardPage = () => {
           </div>
         ) : null}
         <Link className="button button--ghost" to="/admin">
-          Back to Admin hub
+          Back
         </Link>
       </header>
 

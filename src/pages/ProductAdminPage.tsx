@@ -411,7 +411,7 @@ const ProductAdminPage = () => {
         ) : null}
         <div className="admin-shell__actions">
           <Link className="button button--ghost" to="/admin">
-            Back to Admin hub
+            Back
           </Link>
           {isSuperAdmin ? (
             <button
@@ -433,134 +433,141 @@ const ProductAdminPage = () => {
         </div>
       ) : null}
 
-      <section className="admin-grid">
-        <form className="admin-card admin-form" onSubmit={handleSubmit}>
-          <h2>{isEditing ? "Edit Product" : "Catalog Uploader"}</h2>
-          <fieldset className="admin-form__fieldset" disabled={!isSuperAdmin || submitting}>
-            {isEditing ? (
-              <p className="admin-form__notice">
-                Editing <strong>{form.name || "selected product"}</strong>. Uploading a new image will replace the current
-                hero asset.
-              </p>
-            ) : null}
-            <div className="admin-form__row">
-              <label htmlFor="name">Product name</label>
-              <input id="name" name="name" required value={form.name} onChange={handleInputChange} />
-            </div>
-            <div className="admin-form__row">
-              <label htmlFor="sku">SKU</label>
-              <input id="sku" name="sku" required value={form.sku} onChange={handleInputChange} />
-            </div>
-            <div className="admin-form__grid">
-              <div className="admin-form__row">
-                <label htmlFor="price">Price</label>
-                <input
-                  id="price"
-                  name="price"
-                  required
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.price}
-                  onChange={handleInputChange}
-                />
-              </div>
-              <div className="admin-form__row">
-                <label htmlFor="currency">Currency</label>
-                <input id="currency" name="currency" value={form.currency} onChange={handleInputChange} />
-              </div>
-              <div className="admin-form__row">
-                <label htmlFor="onHand">Starting stock</label>
-                <input
-                  id="onHand"
-                  name="onHand"
-                  type="number"
-                  min="0"
-                  value={form.onHand}
-                  onChange={handleInputChange}
-                />
-              </div>
-            </div>
-            <div className="admin-form__grid">
-              <div className="admin-form__row">
-                <label htmlFor="safetyStock">Safety stock</label>
-                <input
-                  id="safetyStock"
-                  name="safetyStock"
-                  type="number"
-                  min="0"
-                  value={form.safetyStock}
-                  onChange={handleInputChange}
-                />
-              </div>
-              <div className="admin-form__row">
-                <label htmlFor="reorderPoint">Reorder point</label>
-                <input
-                  id="reorderPoint"
-                  name="reorderPoint"
-                  type="number"
-                  min="0"
-                  value={form.reorderPoint}
-                  onChange={handleInputChange}
-                />
-              </div>
-            </div>
-            <div className="admin-form__row">
-              <label htmlFor="description">Description</label>
-              <textarea
-                id="description"
-                name="description"
-                rows={3}
-                value={form.description}
-                onChange={handleInputChange}
-              />
-            </div>
-            <div className="admin-form__row">
-              <label htmlFor="image">Product image</label>
-              <input id="image" name="image" type="file" accept="image/*" onChange={handleFileChange} />
-            </div>
-            <div className="admin-form__row">
-              <label htmlFor="imageAlt">Image alt text</label>
-              <input id="imageAlt" name="imageAlt" value={form.imageAlt} onChange={handleInputChange} />
-            </div>
-            <div className="admin-form__grid">
-              <div className="admin-form__row">
-                <label htmlFor="colors">Colorways (comma separated)</label>
-                <input
-                  id="colors"
-                  name="colors"
-                  placeholder="e.g. Midnight Black, Desert Sand"
-                  value={form.colors}
-                  onChange={handleInputChange}
-                />
-              </div>
-              <div className="admin-form__row">
-                <label htmlFor="sizes">Sizes (comma separated)</label>
-                <input
-                  id="sizes"
-                  name="sizes"
-                  placeholder="e.g. 6, 7, 8, 9, 10"
-                  value={form.sizes}
-                  onChange={handleInputChange}
-                />
-              </div>
-              <div className="admin-form__row" />
-            </div>
-            <div className="admin-form__actions">
-              <button className="button button--primary" type="submit" disabled={!isSuperAdmin || submitting}>
-                {submitting ? (isEditing ? "Updating…" : "Saving…") : isEditing ? "Update product" : "Save product"}
-              </button>
+      <section className="admin-grid admin-grid--catalog">
+        {isSuperAdmin ? (
+          <form className="admin-card admin-form" onSubmit={handleSubmit}>
+            <h2>{isEditing ? "Edit Product" : "Catalog Uploader"}</h2>
+            <fieldset className="admin-form__fieldset" disabled={submitting}>
               {isEditing ? (
-                <button className="button button--ghost" type="button" onClick={handleCancelEdit} disabled={submitting}>
-                  Cancel editing
-                </button>
+                <p className="admin-form__notice">
+                  Editing <strong>{form.name || "selected product"}</strong>. Uploading a new image will replace the current
+                  hero asset.
+                </p>
               ) : null}
-            </div>
-          </fieldset>
-          {!isSuperAdmin ? (
-            <p className="admin-form__notice">Request a superadmin upgrade to add or edit catalogue items.</p>
-          ) : null}
-        </form>
+              <div className="admin-form__row">
+                <label htmlFor="name">Product name</label>
+                <input id="name" name="name" required value={form.name} onChange={handleInputChange} />
+              </div>
+              <div className="admin-form__row">
+                <label htmlFor="sku">SKU</label>
+                <input id="sku" name="sku" required value={form.sku} onChange={handleInputChange} />
+              </div>
+              <div className="admin-form__grid">
+                <div className="admin-form__row">
+                  <label htmlFor="price">Price</label>
+                  <input
+                    id="price"
+                    name="price"
+                    required
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.price}
+                    onChange={handleInputChange}
+                  />
+                </div>
+                <div className="admin-form__row">
+                  <label htmlFor="currency">Currency</label>
+                  <input id="currency" name="currency" value={form.currency} onChange={handleInputChange} />
+                </div>
+                <div className="admin-form__row">
+                  <label htmlFor="onHand">Starting stock</label>
+                  <input
+                    id="onHand"
+                    name="onHand"
+                    type="number"
+                    min="0"
+                    value={form.onHand}
+                    onChange={handleInputChange}
+                  />
+                </div>
+              </div>
+              <div className="admin-form__grid">
+                <div className="admin-form__row">
+                  <label htmlFor="safetyStock">Safety stock</label>
+                  <input
+                    id="safetyStock"
+                    name="safetyStock"
+                    type="number"
+                    min="0"
+                    value={form.safetyStock}
+                    onChange={handleInputChange}
+                  />
+                </div>
+                <div className="admin-form__row">
+                  <label htmlFor="reorderPoint">Reorder point</label>
+                  <input
+                    id="reorderPoint"
+                    name="reorderPoint"
+                    type="number"
+                    min="0"
+                    value={form.reorderPoint}
+                    onChange={handleInputChange}
+                  />
+                </div>
+              </div>
+              <div className="admin-form__row">
+                <label htmlFor="description">Description</label>
+                <textarea
+                  id="description"
+                  name="description"
+                  rows={3}
+                  value={form.description}
+                  onChange={handleInputChange}
+                />
+              </div>
+              <div className="admin-form__row">
+                <label htmlFor="image">Product image</label>
+                <input id="image" name="image" type="file" accept="image/*" onChange={handleFileChange} />
+              </div>
+              <div className="admin-form__row">
+                <label htmlFor="imageAlt">Image alt text</label>
+                <input id="imageAlt" name="imageAlt" value={form.imageAlt} onChange={handleInputChange} />
+              </div>
+              <div className="admin-form__grid">
+                <div className="admin-form__row">
+                  <label htmlFor="colors">Colorways (comma separated)</label>
+                  <input
+                    id="colors"
+                    name="colors"
+                    placeholder="e.g. Midnight Black, Desert Sand"
+                    value={form.colors}
+                    onChange={handleInputChange}
+                  />
+                </div>
+                <div className="admin-form__row">
+                  <label htmlFor="sizes">Sizes (comma separated)</label>
+                  <input
+                    id="sizes"
+                    name="sizes"
+                    placeholder="e.g. 6, 7, 8, 9, 10"
+                    value={form.sizes}
+                    onChange={handleInputChange}
+                  />
+                </div>
+                <div className="admin-form__row" />
+              </div>
+              <div className="admin-form__actions">
+                <button className="button button--primary" type="submit" disabled={submitting}>
+                  {submitting ? (isEditing ? "Updating…" : "Saving…") : isEditing ? "Update product" : "Save product"}
+                </button>
+                {isEditing ? (
+                  <button className="button button--ghost" type="button" onClick={handleCancelEdit} disabled={submitting}>
+                    Cancel editing
+                  </button>
+                ) : null}
+              </div>
+            </fieldset>
+          </form>
+        ) : (
+          <div className="admin-card admin-viewer-note">
+            <h2>Catalog Uploader</h2>
+            <p>
+              You&apos;re browsing with view-only access. Superadmins can upload new products, adjust stock thresholds, and
+              manage imagery from this workspace.
+            </p>
+          </div>
+        )}
         <div className="admin-card admin-inventory">
           <div className="admin-inventory__head">
             <h2>Live Catalog</h2>
