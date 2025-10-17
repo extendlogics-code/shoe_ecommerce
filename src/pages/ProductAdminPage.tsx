@@ -65,6 +65,7 @@ const ProductAdminPage = () => {
   const [accessSubmitting, setAccessSubmitting] = useState(false);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [editingProductStatus, setEditingProductStatus] = useState<string>("active");
+  const [showAccessPanel, setShowAccessPanel] = useState(false);
   const navigate = useNavigate();
 
   const loadProducts = useCallback(async () => {
@@ -364,6 +365,7 @@ const ProductAdminPage = () => {
       }
 
       setAccessMessage(`Viewer access created for ${accessEmail}.`);
+      setShowAccessPanel(true);
       setAccessEmail("");
       setAccessPassword("");
       setSuperPassword("");
@@ -407,9 +409,20 @@ const ProductAdminPage = () => {
             </div>
           </div>
         ) : null}
-        <Link className="button button--ghost" to="/admin">
-          Back
-        </Link>
+        <div className="admin-shell__actions">
+          <Link className="button button--ghost" to="/admin">
+            Back to Admin hub
+          </Link>
+          {isSuperAdmin ? (
+            <button
+              className="button button--ghost"
+              type="button"
+              onClick={() => setShowAccessPanel((prev) => !prev)}
+            >
+              {showAccessPanel ? "Hide viewer access" : "Viewer access"}
+            </button>
+          ) : null}
+        </div>
       </header>
 
       {message ? <div className="admin-alert admin-alert--success">{message}</div> : null}
@@ -646,7 +659,7 @@ const ProductAdminPage = () => {
             <p>No products recorded yet.</p>
           )}
         </div>
-        {isSuperAdmin ? (
+        {isSuperAdmin && showAccessPanel ? (
           <section className="admin-card admin-access-card">
             <h2>Viewer Access</h2>
             <p className="admin-access-card__intro">

@@ -7,7 +7,9 @@ import {
   findOrderByTransaction,
   listOrders,
   upsertInvoiceByTransaction,
-  upsertInvoiceForOrder
+  upsertInvoiceForOrder,
+  updateOrderStatus,
+  deleteOrder
 } from "../services/orderService";
 import { OrderCreateInput, OrderItemInput } from "../types/orders";
 
@@ -154,6 +156,38 @@ router.post("/:orderId/invoices", async (req, res, next) => {
   try {
     const order = await upsertInvoiceForOrder(req.params.orderId);
     res.status(201).json(order.invoice);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch("/:orderId/status", async (req, res, next) => {
+  if (!ensureSuperadmin(req, res)) {
+    return;
+  }
+
+  const { status } = req.body as { status?: unknown };
+  if (typeof status !== "string") {
+    res.status(400).json({ message: "Status is required" });
+    return;
+  }
+
+  try {
+    const result = await updateOrderStatus(req.params.orderId, status);
+    res.json({ message: "Order status updated", status: result.status, orderNumber: result.orderNumber });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete("/:orderId", async (req, res, next) => {
+  if (!ensureSuperadmin(req, res)) {
+    return;
+  }
+
+  try {
+    await deleteOrder(req.params.orderId);
+    res.status(204).send();
   } catch (error) {
     next(error);
   }

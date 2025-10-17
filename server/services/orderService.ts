@@ -1,4 +1,4 @@
-import { createWriteStream } from "node:fs";
+import { createWriteStream, promises as fs } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import PDFDocument from "pdfkit";
@@ -166,6 +166,14 @@ export interface PaymentSnapshot {
   method: string | null;
   processedAt: string;
 }
+
+const ALLOWED_ORDER_STATUSES = new Set([
+  "processing",
+  "paid",
+  "fulfilled",
+  "cancelled",
+  "refunded"
+]);
 
 const buildOrderAggregates = (
   orders: OrderRow[],
@@ -972,4 +980,101 @@ export const upsertInvoiceByTransaction = async (transactionId: string) => {
     throw new Error("Order not found for transaction");
   }
   return upsertInvoiceForOrder(order.id);
+};
+
+export const updateOrderStatus = async (orderId: string, nextStatus: string, actor = "admin.dashboard") => {
+  const normalizedStatus = nextStatus.toLowerCase();
+  if (!ALLOWED_ORDER_STATUSES.has(normalizedStatus)) {
+    throw new Error("Unsupported order status");
+  }
+
+  const client = await getClient();
+
+  try {
+    await client.query("BEGIN");
+
+    const currentResult = await client.query<{ status: string; order_number: string }>(
+      "SELECT status, order_number FROM orders WHERE id = $1",
+      [orderId]
+    );
+
+    if (!currentResult.rowCount) {
+      throw new Error("Order not found");
+    }
+
+    const currentStatus = currentResult.rows[0].status;
+    const orderNumber = currentResult.rows[0].order_number;
+
+    if (currentStatus === normalizedStatus) {
+      await client.query("ROLLBACK");
+      return { orderNumber, status: currentStatus };
+    }
+
+    await client.query("UPDATE orders SET status = $2, updated_at = now() WHERE id = $1", [orderId, normalizedStatus]);
+
+    await client.query(
+      `
+        INSERT INTO order_events (
+          id,
+          order_id,
+          event_type,
+          actor,
+          note,
+          metadata
+        )
+        VALUES (
+          gen_random_uuid(),
+          $1,
+          'STATUS_UPDATED',
+          $2,
+          NULL,
+          jsonb_build_object('previousStatus', $3, 'nextStatus', $4)
+        )
+      `,
+      [orderId, actor, currentStatus, normalizedStatus]
+    );
+
+    await client.query("COMMIT");
+    return { orderNumber, status: normalizedStatus };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
+export const deleteOrder = async (orderId: string) => {
+  const client = await getClient();
+
+  try {
+    await client.query("BEGIN");
+
+    const invoiceResult = await client.query<{ pdf_path: string }>(
+      "SELECT pdf_path FROM invoices WHERE order_id = $1",
+      [orderId]
+    );
+
+    const deleteResult = await client.query("DELETE FROM orders WHERE id = $1", [orderId]);
+    if (!deleteResult.rowCount) {
+      throw new Error("Order not found");
+    }
+
+    await client.query("COMMIT");
+
+    if (invoiceResult.rowCount) {
+      const pdfPath = invoiceResult.rows[0].pdf_path;
+      const absolute = path.resolve(process.cwd(), pdfPath);
+      await fs
+        .unlink(absolute)
+        .catch(() => {
+          /* swallow errors when removing old artifacts */
+        });
+    }
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 };

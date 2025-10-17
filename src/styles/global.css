@@ -1757,6 +1757,14 @@ button {
   margin-bottom: 6px;
 }
 
+.admin-shell__actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
 .admin-alert {
   max-width: var(--max-width);
   margin: 0 auto;

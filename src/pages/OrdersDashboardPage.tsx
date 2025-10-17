@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { formatCurrency } from "../utils/currency";
 
+const ORDER_STATUS_VALUES = ["processing", "paid", "fulfilled", "cancelled", "refunded"] as const;
+
 type OrderItem = {
   id: string;
   productId: string;
@@ -88,6 +90,7 @@ const OrdersDashboardPage = () => {
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
   const [invoiceInFlight, setInvoiceInFlight] = useState<string | null>(null);
   const [role, setRole] = useState<"superadmin" | "viewer" | null>(null);
   const [adminEmail, setAdminEmail] = useState<string | null>(null);
@@ -111,6 +114,7 @@ const OrdersDashboardPage = () => {
       const data = (await response.json()) as OrderRecord[];
       setOrders(data);
     } catch (err) {
+      setMessage(null);
       setError(err instanceof Error ? err.message : "Unexpected error");
     } finally {
       setLoading(false);
@@ -150,14 +154,16 @@ const OrdersDashboardPage = () => {
   }, [orders]);
 
   const handleGenerateInvoice = useCallback(
-    async (orderId: string) => {
+    async (orderId: string, successCopy?: string) => {
       if (!isSuperAdmin) {
+        setMessage(null);
         setError("Superadmin privileges are required to generate invoices.");
-        return;
+        return false;
       }
 
       setInvoiceInFlight(orderId);
       setError(null);
+      setMessage(null);
       try {
         const response = await fetch(`/api/orders/${orderId}/invoices`, {
           method: "POST",
@@ -176,10 +182,145 @@ const OrdersDashboardPage = () => {
           throw new Error(detail);
         }
         await loadOrders();
+        setMessage(successCopy ?? "Invoice generated successfully.");
+        return true;
       } catch (err) {
+        setMessage(null);
         setError(err instanceof Error ? err.message : "Unexpected error");
+        return false;
       } finally {
         setInvoiceInFlight(null);
+      }
+    },
+    [isSuperAdmin, loadOrders, role]
+  );
+
+  const handleDownloadInvoice = useCallback(
+    async (order: OrderRecord) => {
+      if (!order.invoice) {
+        if (!isSuperAdmin) {
+          setMessage(null);
+          setError("Invoice not yet available. Please contact a superadmin.");
+          return;
+        }
+
+        await handleGenerateInvoice(
+          order.id,
+          `Invoice generated for ${order.orderNumber}. Click download again to retrieve the PDF.`
+        );
+        return;
+      }
+
+      setError(null);
+      setMessage(null);
+      const url = `/api/orders/${order.id}/invoice`;
+      window.open(url, "_blank", "noopener,noreferrer");
+    },
+    [handleGenerateInvoice, isSuperAdmin]
+  );
+
+  const handleUpdateOrderStatus = useCallback(
+    async (order: OrderRecord) => {
+      if (!isSuperAdmin) {
+        setMessage(null);
+        setError("Superadmin privileges are required to update orders.");
+        return;
+      }
+
+      const choice = window.prompt(
+        `Update status for ${order.orderNumber} (${ORDER_STATUS_VALUES.join(", ")})`,
+        order.status
+      );
+
+      if (!choice) {
+        return;
+      }
+
+      const normalized = choice.trim().toLowerCase();
+      if (!ORDER_STATUS_VALUES.includes(normalized as (typeof ORDER_STATUS_VALUES)[number])) {
+        setMessage(null);
+        setError(`Status must be one of: ${ORDER_STATUS_VALUES.join(", ")}`);
+        return;
+      }
+
+      if (normalized === order.status) {
+        return;
+      }
+
+      setError(null);
+      setMessage(null);
+      try {
+        const response = await fetch(`/api/orders/${order.id}/status`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Admin-Role": role ?? ""
+          },
+          body: JSON.stringify({ status: normalized })
+        });
+
+        if (!response.ok) {
+          let detail = "Failed to update order";
+          try {
+            const payload = (await response.json()) as { message?: string };
+            detail = payload.message ?? detail;
+          } catch {
+            // ignore
+          }
+          throw new Error(detail);
+        }
+
+        setMessage(`Order ${order.orderNumber} marked as ${normalized}.`);
+        await loadOrders();
+      } catch (err) {
+        setMessage(null);
+        setError(err instanceof Error ? err.message : "Unexpected error");
+      }
+    },
+    [isSuperAdmin, loadOrders, role]
+  );
+
+  const handleDeleteOrder = useCallback(
+    async (order: OrderRecord) => {
+      if (!isSuperAdmin) {
+        setMessage(null);
+        setError("Superadmin privileges are required to delete orders.");
+        return;
+      }
+
+      const confirmed = window.confirm(
+        `Delete order ${order.orderNumber}? This will remove its items, events, and invoices.`
+      );
+      if (!confirmed) {
+        return;
+      }
+
+      setError(null);
+      setMessage(null);
+      try {
+        const response = await fetch(`/api/orders/${order.id}`, {
+          method: "DELETE",
+          headers: {
+            "X-Admin-Role": role ?? ""
+          }
+        });
+
+        if (!response.ok) {
+          let detail = "Failed to delete order";
+          try {
+            const payload = (await response.json()) as { message?: string };
+            detail = payload.message ?? detail;
+          } catch {
+            // ignore
+          }
+          throw new Error(detail);
+        }
+
+        setMessage(`Order ${order.orderNumber} deleted.`);
+        await loadOrders();
+      } catch (err) {
+        setMessage(null);
+        setError(err instanceof Error ? err.message : "Unexpected error");
       }
     },
     [isSuperAdmin, loadOrders, role]
@@ -226,10 +367,11 @@ const OrdersDashboardPage = () => {
           </div>
         ) : null}
         <Link className="button button--ghost" to="/admin">
-          Back
+          Back to Admin hub
         </Link>
       </header>
 
+      {message ? <div className="admin-alert admin-alert--success">{message}</div> : null}
       {error ? <div className="admin-alert admin-alert--error">{error}</div> : null}
       {roleResolved && !isSuperAdmin ? (
         <div className="admin-alert admin-alert--info">
@@ -249,7 +391,7 @@ const OrdersDashboardPage = () => {
                 <th>Line Items</th>
                 <th>Totals</th>
                 <th>Status</th>
-                <th>Invoice</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -311,11 +453,11 @@ const OrdersDashboardPage = () => {
                         ) : null}
                       </div>
                     </td>
-                    <td>
-                      <div className={`admin-status admin-status--${order.status}`}>
-                        <span>{order.status}</span>
-                      </div>
-                      {order.events.length ? (
+                  <td>
+                    <div className={`admin-status admin-status--${order.status}`}>
+                      <span>{order.status}</span>
+                    </div>
+                    {order.events.length ? (
                         <details className="admin-events">
                           <summary>Timeline</summary>
                           <ul>
@@ -332,32 +474,56 @@ const OrdersDashboardPage = () => {
                       ) : null}
                     </td>
                     <td>
-                      <div className="admin-table__actions">
-                        {order.invoice ? (
-                          <>
-                            <a className="button button--ghost" href={`/api/orders/${order.id}/invoice`} download>
-                              Download
-                            </a>
-                            <span className="admin-table__muted">
-                              {new Date(order.invoice.generatedAt).toLocaleString()}
-                            </span>
-                          </>
-                        ) : null}
-                        <button
-                          className="button button--primary"
-                          type="button"
-                          disabled={!isSuperAdmin || invoiceInFlight === order.id}
-                          onClick={() => {
-                            void handleGenerateInvoice(order.id);
-                          }}
-                        >
-                          {invoiceInFlight === order.id
-                            ? "Generating…"
-                            : isSuperAdmin
-                            ? "Generate Invoice"
-                            : "View only"}
-                        </button>
-                      </div>
+                      {isSuperAdmin ? (
+                        <div className="admin-table__actions">
+                          <button
+                            className="admin-table__action"
+                            type="button"
+                            onClick={() => {
+                              void handleUpdateOrderStatus(order);
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="admin-table__action admin-table__action--danger"
+                            type="button"
+                            onClick={() => {
+                              void handleDeleteOrder(order);
+                            }}
+                          >
+                            Delete
+                          </button>
+                          <button
+                            className="admin-table__action"
+                            type="button"
+                            disabled={invoiceInFlight === order.id}
+                            onClick={() => {
+                              void handleDownloadInvoice(order);
+                            }}
+                          >
+                            {invoiceInFlight === order.id
+                              ? "Preparing…"
+                              : order.invoice
+                              ? "Download invoice"
+                              : "Generate invoice"}
+                          </button>
+                        </div>
+                      ) : order.invoice ? (
+                        <div className="admin-table__actions">
+                          <button
+                            className="admin-table__action"
+                            type="button"
+                            onClick={() => {
+                              void handleDownloadInvoice(order);
+                            }}
+                          >
+                            Download invoice
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="admin-table__muted">View only</span>
+                      )}
                     </td>
                   </tr>
                 );
