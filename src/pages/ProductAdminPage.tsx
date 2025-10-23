@@ -2,6 +2,7 @@ import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } fro
 import { Link, useNavigate } from "react-router-dom";
 import { formatCurrency } from "../utils/currency";
 import { DEFAULT_CATEGORY_ID, withCategoryPresentation } from "../data/categoryMeta";
+import { clearAdminSession, getAdminSession } from "../utils/adminSession";
 
 type ProductRow = {
   id: string;
@@ -169,16 +170,14 @@ const ProductAdminPage = () => {
   }, []);
 
   useEffect(() => {
-    const isAuthenticated = localStorage.getItem("adminAuthenticated") === "true";
-    const storedRole = localStorage.getItem("adminRole");
-    if (!isAuthenticated || !storedRole) {
+    const session = getAdminSession();
+    if (!session) {
       navigate("/admin/login");
       return;
     }
 
-    const normalizedRole = storedRole === "superadmin" ? "superadmin" : "viewer";
-    setRole(normalizedRole);
-    setAdminEmail(localStorage.getItem("adminEmail"));
+    setRole(session.role);
+    setAdminEmail(session.email);
     void loadProducts();
     void loadCategories();
   }, [loadCategories, loadProducts, navigate]);
@@ -228,9 +227,7 @@ const ProductAdminPage = () => {
   };
 
   const handleLogout = useCallback(() => {
-    localStorage.removeItem("adminAuthenticated");
-    localStorage.removeItem("adminEmail");
-    localStorage.removeItem("adminRole");
+    clearAdminSession();
     navigate("/admin/login");
   }, [navigate]);
 
@@ -773,7 +770,7 @@ Durable rubber outsole"
             </p>
           </div>
         )}
-        <div className="admin-card admin-inventory">
+        <div className="admin-card admin-inventory admin-card--table">
           <div className="admin-inventory__head">
             <h2>Live Catalog</h2>
             <button className="button button--ghost" type="button" onClick={() => void loadProducts()}>
@@ -783,94 +780,96 @@ Durable rubber outsole"
           {loading ? (
             <p>Loading products…</p>
           ) : products.length ? (
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th>SKU</th>
-                  <th>Product</th>
-                  <th>Pricing</th>
-                  <th>Attributes</th>
-                  <th>Inventory</th>
-                  <th>Status</th>
-                  <th>Controls</th>
-                </tr>
-              </thead>
-              <tbody>
-                {products.map((product) => (
-                  <tr key={product.id}>
-                    <td>
-                      <div className="admin-table__primary">
-                        <strong>{product.sku}</strong>
-                      </div>
-                    </td>
-                    <td>
-                      <div className="admin-table__primary">
-                        <strong>{product.name}</strong>
-                        {product.description ? (
-                          <span className="admin-table__muted">{product.description}</span>
-                        ) : null}
-                      </div>
-                    </td>
-                    <td>
-                      <div className="admin-table__primary">
-                        <strong>{formatCurrency(product.price, product.currency)}</strong>
-                      </div>
-                    </td>
-                      <td>
-                      <div className="admin-table__primary">
-                        <span className="admin-table__muted">
-                          Category: {product.categoryLabel ?? (product.category ? product.category : "—")}
-                        </span>
-                        <span className="admin-table__muted">
-                          Colors: {product.colors?.length ? product.colors.join(", ") : "—"}
-                        </span>
-                        <span className="admin-table__muted">
-                          Sizes: {product.sizes?.length ? product.sizes.join(", ") : "—"}
-                        </span>
-                      </div>
-                    </td>
-                    <td>
-                      <div className="admin-table__primary">
-                        <strong>{product.onHand ?? 0}</strong>
-                        <span className="admin-table__muted">
-                          Reserved: {product.reserved ?? 0} • Reorder at {product.reorderPoint ?? 0}
-                        </span>
-                      </div>
-                    </td>
-                    <td>
-                      <span className={`admin-status admin-status--${product.status}`}>{product.status}</span>
-                    </td>
-                    <td>
-                      {isSuperAdmin ? (
-                        <div className="admin-table__actions">
-                          <button
-                            className="admin-table__action"
-                            type="button"
-                            onClick={() => {
-                              handleEditProduct(product);
-                            }}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            className="admin-table__action admin-table__action--danger"
-                            type="button"
-                            onClick={() => {
-                              void handleDeleteProduct(product.id, product.name);
-                            }}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="admin-table__muted">View only</span>
-                      )}
-                    </td>
+            <div className="admin-table__container" role="region" aria-live="polite">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>SKU</th>
+                    <th>Product</th>
+                    <th>Pricing</th>
+                    <th>Attributes</th>
+                    <th>Inventory</th>
+                    <th>Status</th>
+                    <th>Controls</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-        ) : (
+                </thead>
+                <tbody>
+                  {products.map((product) => (
+                    <tr key={product.id}>
+                      <td>
+                        <div className="admin-table__primary">
+                          <strong>{product.sku}</strong>
+                        </div>
+                      </td>
+                      <td>
+                        <div className="admin-table__primary">
+                          <strong>{product.name}</strong>
+                          {product.description ? (
+                            <span className="admin-table__muted">{product.description}</span>
+                          ) : null}
+                        </div>
+                      </td>
+                      <td>
+                        <div className="admin-table__primary">
+                          <strong>{formatCurrency(product.price, product.currency)}</strong>
+                        </div>
+                      </td>
+                      <td>
+                        <div className="admin-table__primary">
+                          <span className="admin-table__muted">
+                            Category: {product.categoryLabel ?? (product.category ? product.category : "—")}
+                          </span>
+                          <span className="admin-table__muted">
+                            Colors: {product.colors?.length ? product.colors.join(", ") : "—"}
+                          </span>
+                          <span className="admin-table__muted">
+                            Sizes: {product.sizes?.length ? product.sizes.join(", ") : "—"}
+                          </span>
+                        </div>
+                      </td>
+                      <td>
+                        <div className="admin-table__primary">
+                          <strong>{product.onHand ?? 0}</strong>
+                          <span className="admin-table__muted">
+                            Reserved: {product.reserved ?? 0} • Reorder at {product.reorderPoint ?? 0}
+                          </span>
+                        </div>
+                      </td>
+                      <td>
+                        <span className={`admin-status admin-status--${product.status}`}>{product.status}</span>
+                      </td>
+                      <td>
+                        {isSuperAdmin ? (
+                          <div className="admin-table__actions">
+                            <button
+                              className="admin-table__action"
+                              type="button"
+                              onClick={() => {
+                                handleEditProduct(product);
+                              }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className="admin-table__action admin-table__action--danger"
+                              type="button"
+                              onClick={() => {
+                                void handleDeleteProduct(product.id, product.name);
+                              }}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="admin-table__muted">View only</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
             <p>No products recorded yet.</p>
           )}
         </div>

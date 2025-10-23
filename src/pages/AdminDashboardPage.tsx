@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { clearAdminSession, getAdminSession } from "../utils/adminSession";
 
 const AdminDashboardPage = () => {
   const [adminEmail, setAdminEmail] = useState<string | null>(null);
@@ -7,21 +8,17 @@ const AdminDashboardPage = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const isAuthenticated = localStorage.getItem("adminAuthenticated") === "true";
-    const storedRole = localStorage.getItem("adminRole");
-    if (!isAuthenticated || !storedRole) {
+    const session = getAdminSession();
+    if (!session) {
       navigate("/admin/login");
       return;
     }
-    const normalizedRole = storedRole === "superadmin" ? "superadmin" : "viewer";
-    setRole(normalizedRole);
-    setAdminEmail(localStorage.getItem("adminEmail"));
+    setRole(session.role);
+    setAdminEmail(session.email);
   }, [navigate]);
 
   const handleLogout = () => {
-    localStorage.removeItem("adminAuthenticated");
-    localStorage.removeItem("adminEmail");
-    localStorage.removeItem("adminRole");
+    clearAdminSession();
     navigate("/admin/login");
   };
 

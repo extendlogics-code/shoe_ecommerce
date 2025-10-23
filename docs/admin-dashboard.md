@@ -64,7 +64,7 @@ Routes are defined in `server/routes/adminAuth.ts`, `server/routes/products.ts`,
 
 ## State & Role Management
 
-- `localStorage` drives client-side guards and determines which controls render.
+- The `adminSession` helper persists a signed-in operator in `sessionStorage` (with a localStorage fallback when the browser blocks session APIs), keeping credentials out of long-lived storage and validating structure on read.
 - Every mutating request includes the `X-Admin-Role` header which the server validates before executing critical operations.
 - Viewer mode surfaces info alerts and disables destructive buttons to prevent accidental modifications.
 - Storefront parity: size and colour availability rendered on customer PDPs comes straight from the admin-managed arrays, so invalid combinations never appear to shoppers.

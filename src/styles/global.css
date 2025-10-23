@@ -2578,6 +2578,27 @@ button {
   align-items: center;
 }
 
+.admin-card--table {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.admin-table__container {
+  width: 100%;
+  overflow-x: auto;
+  border-radius: 18px;
+  border: 1px solid rgba(46, 27, 18, 0.08);
+  background: var(--color-surface);
+  padding: 12px;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
+.admin-table__container table {
+  min-width: 760px;
+}
+
 .admin-table {
   width: 100%;
   border-collapse: collapse;
@@ -2745,6 +2766,37 @@ button {
   .admin-shell__user button {
     width: 100%;
   }
+
+  .admin-inventory__head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .admin-inventory__head .button {
+    align-self: stretch;
+  }
+
+  .admin-table__container {
+    margin: 0 calc(-1 * var(--gutter));
+    padding: 12px var(--gutter);
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+  }
+
+  .admin-table__container table {
+    min-width: 640px;
+  }
+
+  .admin-table__actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-table__action {
+    width: 100%;
+  }
 }
 
 @media (max-width: 1024px) {
@@ -2759,6 +2811,14 @@ button {
   .admin-shell__summary {
     width: 100%;
     grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  }
+
+  .admin-form__grid {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+
+  .admin-card {
+    padding: clamp(20px, 4vw, 30px);
   }
 }
 

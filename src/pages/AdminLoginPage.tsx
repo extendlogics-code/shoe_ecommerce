@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { getAdminSession, setAdminSession } from "../utils/adminSession";
 
 const AdminLoginPage = () => {
   const [email, setEmail] = useState("");
@@ -16,22 +17,22 @@ const AdminLoginPage = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const isAuthenticated = localStorage.getItem("adminAuthenticated") === "true";
-    if (isAuthenticated) {
+    const session = getAdminSession();
+    if (session) {
       navigate("/admin");
     }
   }, [navigate]);
 
-const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-  event.preventDefault();
-  setSubmitting(true);
-  setError(null);
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSubmitting(true);
+    setError(null);
 
-  try {
-    const response = await fetch("/api/admin/login", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
+    try {
+      const response = await fetch("/api/admin/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({ email, password })
       });
@@ -47,65 +48,63 @@ const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
         throw new Error(detail);
       }
 
-  const payload = (await response.json()) as { role?: string };
-  const role = payload.role === "superadmin" ? "superadmin" : "viewer";
-  localStorage.setItem("adminAuthenticated", "true");
-  localStorage.setItem("adminEmail", email);
-  localStorage.setItem("adminRole", role);
-  setFailedAttempts(0);
+      const payload = (await response.json()) as { role?: string };
+      const role = payload.role === "superadmin" ? "superadmin" : "viewer";
+      setAdminSession({ email, role });
+      setFailedAttempts(0);
 
       navigate("/admin");
-  } catch (err) {
-    setError(err instanceof Error ? err.message : "Unexpected error");
-    setFailedAttempts((attempts) => attempts + 1);
-  } finally {
-    setSubmitting(false);
-  }
-};
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unexpected error");
+      setFailedAttempts((attempts) => attempts + 1);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
-const handleRegister = async (event: FormEvent<HTMLFormElement>) => {
-  event.preventDefault();
-  setRegisterSubmitting(true);
-  setRegisterError(null);
-  setRegisterMessage(null);
+  const handleRegister = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setRegisterSubmitting(true);
+    setRegisterError(null);
+    setRegisterMessage(null);
 
-  if (registerPassword !== registerConfirm) {
-    setRegisterSubmitting(false);
-    setRegisterError("Passwords must match.");
-    return;
-  }
-
-  try {
-    const response = await fetch("/api/admin/register", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ email: registerEmail, password: registerPassword })
-    });
-
-    if (!response.ok) {
-      let detail = "Unable to register";
-      try {
-        const payload = (await response.json()) as { message?: string };
-        detail = payload.message ?? detail;
-      } catch {
-        // ignore JSON parsing errors
-      }
-      throw new Error(detail);
+    if (registerPassword !== registerConfirm) {
+      setRegisterSubmitting(false);
+      setRegisterError("Passwords must match.");
+      return;
     }
 
-    setRegisterMessage("Viewer account created. You can now sign in above.");
-    setRegisterEmail("");
-    setRegisterPassword("");
-    setRegisterConfirm("");
-    setFailedAttempts(0);
-  } catch (err) {
-    setRegisterError(err instanceof Error ? err.message : "Unexpected error");
-  } finally {
-    setRegisterSubmitting(false);
-  }
-};
+    try {
+      const response = await fetch("/api/admin/register", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ email: registerEmail, password: registerPassword })
+      });
+
+      if (!response.ok) {
+        let detail = "Unable to register";
+        try {
+          const payload = (await response.json()) as { message?: string };
+          detail = payload.message ?? detail;
+        } catch {
+          // ignore JSON parsing errors
+        }
+        throw new Error(detail);
+      }
+
+      setRegisterMessage("Viewer account created. You can now sign in above.");
+      setRegisterEmail("");
+      setRegisterPassword("");
+      setRegisterConfirm("");
+      setFailedAttempts(0);
+    } catch (err) {
+      setRegisterError(err instanceof Error ? err.message : "Unexpected error");
+    } finally {
+      setRegisterSubmitting(false);
+    }
+  };
 
   const showRegistration = failedAttempts >= 3;
 

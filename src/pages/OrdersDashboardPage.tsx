@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { formatCurrency } from "../utils/currency";
+import { clearAdminSession, getAdminSession } from "../utils/adminSession";
 
 const ORDER_STATUS_VALUES = ["processing", "paid", "fulfilled", "cancelled", "refunded"] as const;
 
@@ -122,16 +123,13 @@ const OrdersDashboardPage = () => {
   }, []);
 
   useEffect(() => {
-    const isAuthenticated = localStorage.getItem("adminAuthenticated") === "true";
-    const storedRole = localStorage.getItem("adminRole");
-    if (!isAuthenticated || !storedRole) {
+    const session = getAdminSession();
+    if (!session) {
       navigate("/admin/login");
       return;
     }
-
-    const normalizedRole = storedRole === "superadmin" ? "superadmin" : "viewer";
-    setRole(normalizedRole);
-    setAdminEmail(localStorage.getItem("adminEmail"));
+    setRole(session.role);
+    setAdminEmail(session.email);
     void loadOrders();
   }, [loadOrders, navigate]);
 
@@ -311,9 +309,7 @@ const OrdersDashboardPage = () => {
   );
 
   const handleLogout = useCallback(() => {
-    localStorage.removeItem("adminAuthenticated");
-    localStorage.removeItem("adminEmail");
-    localStorage.removeItem("adminRole");
+    clearAdminSession();
     navigate("/admin/login");
   }, [navigate]);
 
@@ -366,163 +362,167 @@ const OrdersDashboardPage = () => {
       {loading ? (
         <div className="admin-card">Loading orders…</div>
       ) : (
-        <section className="admin-card">
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>Order</th>
-                <th>Customer</th>
-                <th>Line Items</th>
-                <th>Totals</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {orders.map((order) => {
-                const currency = order.currency ?? "INR";
-                return (
-                  <tr key={order.id}>
-                    <td>
-                      <div className="admin-table__primary">
-                        <strong>{order.orderNumber}</strong>
-                        <span>{new Date(order.placedAt).toLocaleString()}</span>
-                        <span className="admin-table__muted">Txn: {order.transactionId}</span>
-                      </div>
-                    </td>
-                    <td>
-                      <div className="admin-table__primary">
-                        <strong>
-                          {order.customer.firstName} {order.customer.lastName}
-                        </strong>
-                        <span>{order.customer.email}</span>
-                        {order.shippingAddress ? (
-                          <span className="admin-table__muted">
-                            {order.shippingAddress.city}, {order.shippingAddress.country}
-                          </span>
-                        ) : null}
-                      </div>
-                    </td>
-                    <td>
-                      <details>
-                        <summary>{order.items.length} items</summary>
-                        <ul className="admin-line-items">
-                          {order.items.map((item) => (
-                            <li key={item.id}>
-                              <div>
-                                <strong>{item.productName}</strong>
-                                <span className="admin-table__muted">SKU {item.sku}</span>
-                              </div>
-                              <div>
-                                <span>
-                                  {item.quantity} × {formatCurrency(item.unitPrice, currency)}
-                                </span>
-                                <span className="admin-table__muted">
-                                  On hand: {item.inventory.onHand ?? "—"} / Reserved:{" "}
-                                  {item.inventory.reserved ?? "—"}
-                                </span>
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
-                      </details>
-                    </td>
-                    <td>
-                      <div className="admin-table__primary">
-                        <strong>{formatCurrency(order.totalAmount, currency)}</strong>
-                        {order.payment ? (
-                          <span className="admin-table__muted">
-                            Paid {new Date(order.payment.processedAt).toLocaleDateString()}
-                          </span>
-                        ) : null}
-                      </div>
-                    </td>
-                  <td>
-                    {isSuperAdmin && order.status === "processing" ? (
-                      <select
-                        className="admin-status__select"
-                        value={order.status}
-                        onChange={(event) => {
-                          const value = event.target.value as (typeof ORDER_STATUS_VALUES)[number];
-                          void handleUpdateOrderStatus(order, value);
-                        }}
-                      >
-                        {ORDER_STATUS_VALUES.map((status) => (
-                          <option key={status} value={status}>
-                            {status}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <div className={`admin-status admin-status--${order.status}`}>
-                        <span>{order.status}</span>
-                      </div>
-                    )}
-                    {order.events.length ? (
-                        <details className="admin-events">
-                          <summary>Timeline</summary>
-                          <ul>
-                            {order.events.map((event) => (
-                              <li key={event.id}>
-                                <span>{event.type}</span>
-                                <span className="admin-table__muted">
-                                  {new Date(event.createdAt).toLocaleString()}
-                                </span>
-                              </li>
-                            ))}
-                          </ul>
-                        </details>
-                      ) : null}
-                    </td>
-                    <td>
-                      {isSuperAdmin ? (
-                        <div className="admin-table__actions">
-                          <button
-                            className="admin-table__action admin-table__action--danger"
-                            type="button"
-                            onClick={() => {
-                              void handleDeleteOrder(order);
-                            }}
-                          >
-                            Delete
-                          </button>
-                          <button
-                            className="admin-table__action"
-                            type="button"
-                            disabled={invoiceInFlight === order.id}
-                            onClick={() => {
-                              void handleDownloadInvoice(order);
-                            }}
-                          >
-                            {invoiceInFlight === order.id
-                              ? "Preparing…"
-                              : order.invoice
-                              ? "Download invoice"
-                              : "Generate invoice"}
-                          </button>
-                        </div>
-                      ) : order.invoice ? (
-                        <div className="admin-table__actions">
-                          <button
-                            className="admin-table__action"
-                            type="button"
-                            onClick={() => {
-                              void handleDownloadInvoice(order);
-                            }}
-                          >
-                            Download invoice
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="admin-table__muted">View only</span>
-                      )}
-                    </td>
+        <section className="admin-card admin-card--table">
+          {!orders.length ? (
+            <p>No orders captured yet.</p>
+          ) : (
+            <div className="admin-table__container" role="region" aria-live="polite">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Order</th>
+                    <th>Customer</th>
+                    <th>Line Items</th>
+                    <th>Totals</th>
+                    <th>Status</th>
+                    <th>Actions</th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          {!orders.length ? <p>No orders captured yet.</p> : null}
+                </thead>
+                <tbody>
+                  {orders.map((order) => {
+                    const currency = order.currency ?? "INR";
+                    return (
+                      <tr key={order.id}>
+                        <td>
+                          <div className="admin-table__primary">
+                            <strong>{order.orderNumber}</strong>
+                            <span>{new Date(order.placedAt).toLocaleString()}</span>
+                            <span className="admin-table__muted">Txn: {order.transactionId}</span>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="admin-table__primary">
+                            <strong>
+                              {order.customer.firstName} {order.customer.lastName}
+                            </strong>
+                            <span>{order.customer.email}</span>
+                            {order.shippingAddress ? (
+                              <span className="admin-table__muted">
+                                {order.shippingAddress.city}, {order.shippingAddress.country}
+                              </span>
+                            ) : null}
+                          </div>
+                        </td>
+                        <td>
+                          <details>
+                            <summary>{order.items.length} items</summary>
+                            <ul className="admin-line-items">
+                              {order.items.map((item) => (
+                                <li key={item.id}>
+                                  <div>
+                                    <strong>{item.productName}</strong>
+                                    <span className="admin-table__muted">SKU {item.sku}</span>
+                                  </div>
+                                  <div>
+                                    <span>
+                                      {item.quantity} × {formatCurrency(item.unitPrice, currency)}
+                                    </span>
+                                    <span className="admin-table__muted">
+                                      On hand: {item.inventory.onHand ?? "—"} / Reserved: {item.inventory.reserved ?? "—"}
+                                    </span>
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
+                          </details>
+                        </td>
+                        <td>
+                          <div className="admin-table__primary">
+                            <strong>{formatCurrency(order.totalAmount, currency)}</strong>
+                            {order.payment ? (
+                              <span className="admin-table__muted">
+                                Paid {new Date(order.payment.processedAt).toLocaleDateString()}
+                              </span>
+                            ) : null}
+                          </div>
+                        </td>
+                        <td>
+                          {isSuperAdmin && order.status === "processing" ? (
+                            <select
+                              className="admin-status__select"
+                              value={order.status}
+                              onChange={(event) => {
+                                const value = event.target.value as (typeof ORDER_STATUS_VALUES)[number];
+                                void handleUpdateOrderStatus(order, value);
+                              }}
+                            >
+                              {ORDER_STATUS_VALUES.map((status) => (
+                                <option key={status} value={status}>
+                                  {status}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <div className={`admin-status admin-status--${order.status}`}>
+                              <span>{order.status}</span>
+                            </div>
+                          )}
+                          {order.events.length ? (
+                            <details className="admin-events">
+                              <summary>Timeline</summary>
+                              <ul>
+                                {order.events.map((event) => (
+                                  <li key={event.id}>
+                                    <span>{event.type}</span>
+                                    <span className="admin-table__muted">
+                                      {new Date(event.createdAt).toLocaleString()}
+                                    </span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </details>
+                          ) : null}
+                        </td>
+                        <td>
+                          {isSuperAdmin ? (
+                            <div className="admin-table__actions">
+                              <button
+                                className="admin-table__action admin-table__action--danger"
+                                type="button"
+                                onClick={() => {
+                                  void handleDeleteOrder(order);
+                                }}
+                              >
+                                Delete
+                              </button>
+                              <button
+                                className="admin-table__action"
+                                type="button"
+                                disabled={invoiceInFlight === order.id}
+                                onClick={() => {
+                                  void handleDownloadInvoice(order);
+                                }}
+                              >
+                                {invoiceInFlight === order.id
+                                  ? "Preparing…"
+                                  : order.invoice
+                                  ? "Download invoice"
+                                  : "Generate invoice"}
+                              </button>
+                            </div>
+                          ) : order.invoice ? (
+                            <div className="admin-table__actions">
+                              <button
+                                className="admin-table__action"
+                                type="button"
+                                onClick={() => {
+                                  void handleDownloadInvoice(order);
+                                }}
+                              >
+                                Download invoice
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="admin-table__muted">View only</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
       )}
     </main>
