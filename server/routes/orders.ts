@@ -9,9 +9,10 @@ import {
   upsertInvoiceByTransaction,
   upsertInvoiceForOrder,
   updateOrderStatus,
-  deleteOrder
+  deleteOrder,
+  sendInvoiceEmailNotification
 } from "../services/orderService";
-import { OrderCreateInput, OrderItemInput } from "../types/orders";
+import { AddressInput, OrderCreateInput, OrderItemInput } from "../types/orders";
 
 const router = Router();
 
@@ -71,13 +72,24 @@ const parseItems = (items: unknown): OrderItemInput[] => {
       throw new Error("Quantity and unit price must be numeric");
     }
 
+    const size =
+      raw.size === null || raw.size === undefined || String(raw.size).trim() === ""
+        ? undefined
+        : String(raw.size).trim();
+    const color =
+      raw.color === null || raw.color === undefined || String(raw.color).trim() === ""
+        ? undefined
+        : String(raw.color).trim();
+
     return {
       productId: String(raw.productId),
       sku: String(raw.sku),
       quantity,
       unitPrice,
       discount: raw.discount ? Number(raw.discount) : undefined,
-      tax: raw.tax ? Number(raw.tax) : undefined
+      tax: raw.tax ? Number(raw.tax) : undefined,
+      size,
+      color
     };
   });
 };
@@ -106,6 +118,23 @@ router.post("/", async (req, res, next) => {
       return;
     }
 
+    const pinPattern = /^[0-9]{6}$/;
+    const shippingPostalCode = String(payload.shippingAddress.postalCode ?? "").trim();
+    if (!pinPattern.test(shippingPostalCode)) {
+      res.status(400).json({ message: "PIN code must be a 6-digit number" });
+      return;
+    }
+
+    let billingAddressResolved: AddressInput | undefined;
+    if (payload.billingAddress) {
+      const billingPostalCode = String(payload.billingAddress.postalCode ?? "").trim();
+      if (!pinPattern.test(billingPostalCode)) {
+        res.status(400).json({ message: "Billing PIN code must be a 6-digit number" });
+        return;
+      }
+      billingAddressResolved = { ...payload.billingAddress, postalCode: billingPostalCode };
+    }
+
     const order = await createOrder({
       transactionId: payload.transactionId ?? randomUUID(),
       currency: payload.currency,
@@ -117,8 +146,8 @@ router.post("/", async (req, res, next) => {
         email: payload.customer.email,
         phone: payload.customer.phone
       },
-      shippingAddress: payload.shippingAddress,
-      billingAddress: payload.billingAddress ?? payload.shippingAddress,
+      shippingAddress: { ...payload.shippingAddress, postalCode: shippingPostalCode },
+      billingAddress: billingAddressResolved ?? { ...payload.shippingAddress, postalCode: shippingPostalCode },
       items,
       note: payload.note,
       status: payload.status ?? "processing",
@@ -194,6 +223,7 @@ router.get("/transaction/:transactionId/invoice", async (req, res, next) => {
     }
 
     const filePath = path.resolve(process.cwd(), order.invoice.pdfPath);
+    void sendInvoiceEmailNotification(order, filePath);
     res.download(filePath);
   } catch (error) {
     next(error);
@@ -209,6 +239,7 @@ router.get("/:orderId/invoice", async (req, res, next) => {
     }
 
     const filePath = path.resolve(process.cwd(), order.invoice.pdfPath);
+    void sendInvoiceEmailNotification(order, filePath);
     res.download(filePath);
   } catch (error) {
     next(error);

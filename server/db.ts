@@ -1,5 +1,9 @@
-import { Pool } from "pg";
+import { Pool, types } from "pg";
 import { appConfig } from "./config";
+
+const parseNumeric = (value: string | null) => (value === null ? null : Number(value));
+
+types.setTypeParser(1700, parseNumeric);
 
 const pool = new Pool({
   host: appConfig.database.host,

@@ -22,6 +22,8 @@ export interface OrderItemInput {
   unitPrice: number;
   discount?: number;
   tax?: number;
+  size?: string | null;
+  color?: string | null;
 }
 
 export interface OrderCreateInput {

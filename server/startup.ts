@@ -30,11 +30,11 @@ export const ensureDatabaseBootstrap = async () => {
             ) THEN
               ALTER TABLE products
                 ADD COLUMN size_scale TEXT[] NOT NULL DEFAULT '{}'::text[];
-            END IF;
           END IF;
-        END;
-        $$;
-      `
+        END IF;
+      END;
+      $$;
+    `
     );
 
     await client.query(
@@ -85,6 +85,67 @@ export const ensureDatabaseBootstrap = async () => {
         BEFORE UPDATE ON admin_users
         FOR EACH ROW
         EXECUTE FUNCTION set_updated_at();
+      `
+    );
+
+    await client.query(
+      `
+        DO $$
+        BEGIN
+          IF EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = current_schema()
+              AND table_name = 'customer_addresses'
+              AND column_name = 'postal_code'
+          ) THEN
+            IF NOT EXISTS (
+              SELECT 1
+              FROM information_schema.table_constraints tc
+              JOIN information_schema.constraint_column_usage ccu
+                ON tc.constraint_name = ccu.constraint_name
+               AND tc.table_name = ccu.table_name
+               AND tc.constraint_schema = ccu.constraint_schema
+              WHERE tc.table_schema = current_schema()
+                AND tc.table_name = 'customer_addresses'
+                AND tc.constraint_type = 'CHECK'
+                AND tc.constraint_name = 'customer_addresses_postal_code_check'
+            ) THEN
+              ALTER TABLE customer_addresses
+                ADD CONSTRAINT customer_addresses_postal_code_check
+                CHECK (postal_code ~ '^[0-9]{6}$');
+            END IF;
+          END IF;
+        END;
+        $$;
+      `
+    );
+
+    await client.query(
+      `
+        DO $$
+        BEGIN
+          IF EXISTS (
+            SELECT 1
+            FROM information_schema.tables
+            WHERE table_schema = current_schema()
+              AND table_name = 'inventory_events'
+          ) THEN
+            BEGIN
+              ALTER TABLE inventory_events DROP CONSTRAINT IF EXISTS inventory_events_order_id_fkey;
+              ALTER TABLE inventory_events
+                ADD CONSTRAINT inventory_events_order_id_fkey
+                FOREIGN KEY (order_id)
+                REFERENCES orders(id)
+                ON DELETE CASCADE
+                DEFERRABLE INITIALLY DEFERRED;
+            EXCEPTION
+              WHEN undefined_table THEN NULL;
+              WHEN duplicate_object THEN NULL;
+            END;
+          END IF;
+        END;
+        $$;
       `
     );
 

@@ -46,6 +46,7 @@ type ApiProduct = {
 
 type ViewProduct = {
   id: string;
+  sku: string;
   name: string;
   price: number;
   currency: string;
@@ -76,19 +77,20 @@ const PLACEHOLDER_IMAGE =
 
 const mapToViewProduct = (product: ApiProduct): ViewProduct => ({
   id: product.id,
+  sku: product.sku,
   name: product.name,
   price: product.price,
   currency: product.currency ?? "INR",
   image: product.imagePath ? `/${product.imagePath}` : PLACEHOLDER_IMAGE,
   status: product.status,
-  colors: Array.isArray(product.colors) ? product.colors : [],
-  sizes: Array.isArray(product.sizes) ? product.sizes : [],
+  colors: Array.isArray(product.colors) ? product.colors.filter(Boolean) : [],
+  sizes: Array.isArray(product.sizes) ? product.sizes.filter(Boolean) : [],
   description: product.description,
-  productDetails: product.productDetails ?? null,
+  productDetails: product.productDetails?.filter((entry) => entry && entry.trim().length) ?? null,
   productStory: product.productStory ?? null,
   materialInfo: product.materialInfo ?? null,
-  careInstructions: product.careInstructions ?? null,
-  features: product.features ?? null,
+  careInstructions: product.careInstructions?.filter((entry) => entry && entry.trim().length) ?? null,
+  features: product.features?.filter((entry) => entry && entry.trim().length) ?? null,
   onHand: product.onHand ?? null,
   reserved: product.reserved ?? null,
   safetyStock: product.safetyStock ?? null,
@@ -108,6 +110,8 @@ const NewProductsPage = () => {
   const [selectedProduct, setSelectedProduct] = useState<ViewProduct | null>(null);
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [sizeError, setSizeError] = useState<string | null>(null);
+  const [selectedColor, setSelectedColor] = useState<string | null>(null);
+  const [colorError, setColorError] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [customizations, setCustomizations] = useState<Record<string, string>>({});
   const [currentAngle, setCurrentAngle] = useState(0);
@@ -141,6 +145,8 @@ const NewProductsPage = () => {
           setSelectedProduct(null);
           setSelectedSize(null);
           setSizeError(null);
+          setSelectedColor(null);
+          setColorError(null);
           setQuantity(1);
         }
       } catch (err) {
@@ -166,6 +172,8 @@ const NewProductsPage = () => {
     setSelectedProduct(product);
     setSelectedSize(null);
     setSizeError(null);
+    setSelectedColor(product.colors?.[0] ?? null);
+    setColorError(null);
     setQuantity(1);
   };
 
@@ -173,6 +181,8 @@ const NewProductsPage = () => {
     setSelectedProduct(null);
     setSelectedSize(null);
     setSizeError(null);
+    setSelectedColor(null);
+    setColorError(null);
     setQuantity(1);
   };
 
@@ -191,6 +201,11 @@ const NewProductsPage = () => {
     setSizeError(null);
   };
 
+  const handleColorSelect = (color: string) => {
+    setSelectedColor(color);
+    setColorError(null);
+  };
+
   const handleAddToCart = () => {
     if (!selectedProduct) {
       return;
@@ -199,24 +214,58 @@ const NewProductsPage = () => {
       setSizeError("Please select a size");
       return;
     }
+    if (selectedProduct.colors.length && !selectedColor) {
+      setColorError("Please select a color");
+      return;
+    }
+    setColorError(null);
+
     const customizationLabels = selectedProduct.customizationOptions
-      ?.filter(opt => customizations[opt.id])
-      ?.map(opt => {
-        const choice = opt.choices.find(c => c.id === customizations[opt.id]);
+      ?.filter((opt) => customizations[opt.id])
+      ?.map((opt) => {
+        const choice = opt.choices.find((c) => c.id === customizations[opt.id]);
         return `${opt.name}: ${choice?.name}`;
       });
 
+    const sortedCustomizationPairs = Object.entries(customizations).sort(([a], [b]) => a.localeCompare(b));
+    const customizationKey = sortedCustomizationPairs.map(([, choiceId]) => choiceId).join("-");
+
+    const colorOption = selectedProduct.customizationOptions?.find(
+      (opt) => opt.type === "color" && customizations[opt.id]
+    );
+    const selectedColorChoice = colorOption?.choices.find((choice) => choice.id === customizations[colorOption.id]);
+    const selectedColorName = selectedColorChoice?.name ?? null;
+    const effectiveColor = selectedColorName ?? selectedColor ?? null;
+
+    const idParts = [selectedProduct.id, selectedSize ?? "", effectiveColor ?? "", customizationKey]
+      .filter(Boolean);
+    const cartItemId = idParts.join("::");
+
+    const labelParts = [`Size ${selectedSize}`];
+    if (effectiveColor) {
+      labelParts.push(`Color ${effectiveColor}`);
+    }
+    if (customizationLabels?.length) {
+      labelParts.push(...customizationLabels);
+    }
+
     addItem(
       {
-        id: `${selectedProduct.id}${Object.values(customizations).join('-')}`,
+        id: cartItemId || selectedProduct.id,
         name: selectedProduct.name,
         price: selectedProduct.price + totalPrice,
         image: selectedProduct.image,
         badge: selectedProduct.status === "active" ? "New" : selectedProduct.status,
         colors: selectedProduct.colors.length,
-        categoryLabel: `Size ${selectedSize}${customizationLabels?.length ? ` | ${customizationLabels.join(' | ')}` : ''}`
+        categoryLabel: labelParts.join(" | ")
       },
-      quantity
+      quantity,
+      {
+        size: selectedSize,
+        color: effectiveColor,
+        productId: selectedProduct.id,
+        sku: selectedProduct.sku
+      }
     );
   };
 
@@ -226,6 +275,10 @@ const NewProductsPage = () => {
     }
     if (!selectedSize) {
       setSizeError("Please select a size");
+      return;
+    }
+    if (selectedProduct.colors.length && !selectedColor) {
+      setColorError("Please select a color");
       return;
     }
     handleAddToCart();
@@ -436,6 +489,35 @@ const NewProductsPage = () => {
                       ))}
                     </div>
                     {sizeError && <p className="new-products-page__size-error">{sizeError}</p>}
+                  </div>
+                ) : null}
+
+                {selectedProduct.colors.length ? (
+                  <div className="new-products-page__color-picker">
+                    <span>Colors</span>
+                    <div className="new-products-page__color-options">
+                      {selectedProduct.colors.map((color) => {
+                        const normalized = color.trim();
+                        const isSelected = selectedColor === color;
+                        const isHex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(normalized);
+                        const swatchStyle = isHex ? { backgroundColor: normalized } : undefined;
+                        return (
+                          <button
+                            key={color}
+                            type="button"
+                            className={clsx(
+                              "new-products-page__color-option",
+                              isSelected && "new-products-page__color-option--selected"
+                            )}
+                            onClick={() => handleColorSelect(color)}
+                          >
+                            <span className="new-products-page__color-swatch" style={swatchStyle} aria-hidden="true" />
+                            <span>{color}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {colorError && <p className="new-products-page__color-error">{colorError}</p>}
                   </div>
                 ) : null}
 

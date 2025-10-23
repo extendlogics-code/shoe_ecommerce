@@ -220,30 +220,14 @@ const OrdersDashboardPage = () => {
   );
 
   const handleUpdateOrderStatus = useCallback(
-    async (order: OrderRecord) => {
+    async (order: OrderRecord, nextStatus: (typeof ORDER_STATUS_VALUES)[number]) => {
       if (!isSuperAdmin) {
         setMessage(null);
         setError("Superadmin privileges are required to update orders.");
         return;
       }
 
-      const choice = window.prompt(
-        `Update status for ${order.orderNumber} (${ORDER_STATUS_VALUES.join(", ")})`,
-        order.status
-      );
-
-      if (!choice) {
-        return;
-      }
-
-      const normalized = choice.trim().toLowerCase();
-      if (!ORDER_STATUS_VALUES.includes(normalized as (typeof ORDER_STATUS_VALUES)[number])) {
-        setMessage(null);
-        setError(`Status must be one of: ${ORDER_STATUS_VALUES.join(", ")}`);
-        return;
-      }
-
-      if (normalized === order.status) {
+      if (nextStatus === order.status) {
         return;
       }
 
@@ -256,7 +240,7 @@ const OrdersDashboardPage = () => {
             "Content-Type": "application/json",
             "X-Admin-Role": role ?? ""
           },
-          body: JSON.stringify({ status: normalized })
+          body: JSON.stringify({ status: nextStatus })
         });
 
         if (!response.ok) {
@@ -270,7 +254,7 @@ const OrdersDashboardPage = () => {
           throw new Error(detail);
         }
 
-        setMessage(`Order ${order.orderNumber} marked as ${normalized}.`);
+        setMessage(`Order ${order.orderNumber} marked as ${nextStatus}.`);
         await loadOrders();
       } catch (err) {
         setMessage(null);
@@ -454,9 +438,26 @@ const OrdersDashboardPage = () => {
                       </div>
                     </td>
                   <td>
-                    <div className={`admin-status admin-status--${order.status}`}>
-                      <span>{order.status}</span>
-                    </div>
+                    {isSuperAdmin && order.status === "processing" ? (
+                      <select
+                        className="admin-status__select"
+                        value={order.status}
+                        onChange={(event) => {
+                          const value = event.target.value as (typeof ORDER_STATUS_VALUES)[number];
+                          void handleUpdateOrderStatus(order, value);
+                        }}
+                      >
+                        {ORDER_STATUS_VALUES.map((status) => (
+                          <option key={status} value={status}>
+                            {status}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className={`admin-status admin-status--${order.status}`}>
+                        <span>{order.status}</span>
+                      </div>
+                    )}
                     {order.events.length ? (
                         <details className="admin-events">
                           <summary>Timeline</summary>
@@ -476,15 +477,6 @@ const OrdersDashboardPage = () => {
                     <td>
                       {isSuperAdmin ? (
                         <div className="admin-table__actions">
-                          <button
-                            className="admin-table__action"
-                            type="button"
-                            onClick={() => {
-                              void handleUpdateOrderStatus(order);
-                            }}
-                          >
-                            Edit
-                          </button>
                           <button
                             className="admin-table__action admin-table__action--danger"
                             type="button"

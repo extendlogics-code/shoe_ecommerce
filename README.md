@@ -36,7 +36,7 @@ The API also runs `ensureDatabaseBootstrap`, but executing the script once ensur
 ### Run the backend API
 
 ```bash
-# launches Express on http://localhost:4000
+# launches Express on http://localhost:4001
 npm run server
 ```
 

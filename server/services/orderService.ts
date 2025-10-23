@@ -5,6 +5,7 @@ import PDFDocument from "pdfkit";
 import { getClient } from "../db";
 import { appConfig } from "../config";
 import { OrderCreateInput, OrderItemInput } from "../types/orders";
+import { sendMail } from "../utils/email";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -175,6 +176,21 @@ const ALLOWED_ORDER_STATUSES = new Set([
   "refunded"
 ]);
 
+const slugify = (value: string) =>
+  value
+    .normalize("NFKD")
+    .replace(/[^\w\s-]/g, "")
+    .trim()
+    .replace(/[\s_-]+/g, "-")
+    .toLowerCase();
+
+const buildInvoiceFileName = (order: OrderDashboardEntry, invoiceNumber: string) => {
+  const customerNameSlug = slugify(`${order.customer.firstName} ${order.customer.lastName}`) || "customer";
+  const orderNumberSlug = slugify(order.orderNumber) || order.orderNumber;
+  const placedDate = new Date(order.placedAt).toISOString().slice(0, 10);
+  return `${orderNumberSlug}-${customerNameSlug}-${placedDate}-${invoiceNumber}.pdf`;
+};
+
 const buildOrderAggregates = (
   orders: OrderRow[],
   items: ItemRow[],
@@ -189,7 +205,7 @@ const buildOrderAggregates = (
       id: row.id,
       orderNumber: row.order_number,
       status: row.status,
-      totalAmount: row.total_amount,
+      totalAmount: Number(row.total_amount),
       currency: row.currency,
       transactionId: row.transaction_id,
       channel: row.channel,
@@ -240,9 +256,9 @@ const buildOrderAggregates = (
         sku: item.sku,
         productName: item.product_name,
         quantity: item.quantity,
-        unitPrice: item.unit_price,
-        discount: item.discount_amount,
-        tax: item.tax_amount,
+        unitPrice: Number(item.unit_price),
+        discount: item.discount_amount !== null ? Number(item.discount_amount) : null,
+        tax: item.tax_amount !== null ? Number(item.tax_amount) : null,
         imagePath: item.image_path,
         inventory: {
           onHand: item.inventory_on_hand,
@@ -274,7 +290,7 @@ const buildOrderAggregates = (
         invoiceNumber: invoice.invoice_number,
         pdfPath: invoice.pdf_path,
         generatedAt: invoice.generated_at.toISOString(),
-        totalAmount: invoice.total_amount,
+        totalAmount: Number(invoice.total_amount),
         currency: invoice.currency
       };
     }
@@ -287,7 +303,7 @@ const buildOrderAggregates = (
         id: payment.id,
         transactionId: payment.transaction_id,
         status: payment.status,
-        amount: payment.amount,
+        amount: Number(payment.amount),
         currency: payment.currency,
         method: payment.method,
         processedAt: payment.processed_at.toISOString()
@@ -564,9 +580,9 @@ const updateInventoryForItem = async (
         $3,
         'order.create',
         jsonb_build_object(
-          'orderItemId', $4,
-          'sku', $5,
-          'quantity', $6
+          'orderItemId', $4::text,
+          'sku', $5::text,
+          'quantity', $6::integer
         )
       )
     `,
@@ -625,6 +641,120 @@ const insertOrderItem = async (
   await updateInventoryForItem(client, orderId, orderItemId, item);
 
   return orderItemId;
+};
+
+const releaseInventoryForOrder = async (
+  client: Awaited<ReturnType<typeof getClient>>,
+  orderId: string
+) => {
+  const { rows } = await client.query<{ id: string; product_id: string; sku: string; quantity: number }>(
+    `
+      SELECT
+        id,
+        product_id,
+        sku,
+        quantity
+      FROM order_items
+      WHERE order_id = $1
+    `,
+    [orderId]
+  );
+
+  for (const item of rows) {
+    const quantity = Math.abs(item.quantity);
+    const updateResult = await client.query(
+      `
+        UPDATE inventory_items
+        SET
+          on_hand = on_hand + $2,
+          reserved = GREATEST(reserved - $2, 0),
+          updated_at = now()
+        WHERE product_id = $1
+        RETURNING on_hand
+      `,
+      [item.product_id, quantity]
+    );
+
+    if (!updateResult.rowCount) {
+      continue;
+    }
+
+    await client.query(
+      `
+        INSERT INTO inventory_events (
+          id,
+          product_id,
+          order_id,
+          event_type,
+          delta,
+          source,
+          metadata
+        )
+        VALUES (
+          gen_random_uuid(),
+          $1,
+          NULL,
+          'ORDER_RELEASED',
+          $2,
+          'order.delete',
+          jsonb_build_object(
+            'orderId', $3::uuid,
+            'orderItemId', $4::uuid,
+            'sku', $5::text,
+            'quantity', $2::integer
+          )
+        )
+      `,
+      [item.product_id, quantity, orderId, item.id, item.sku]
+    );
+  }
+};
+
+export const sendInvoiceEmailNotification = async (
+  order: OrderDashboardEntry,
+  invoiceAbsolutePath: string
+) => {
+  if (!order.customer.email) {
+    return;
+  }
+
+  try {
+    const invoiceNumber = order.invoice?.invoiceNumber ?? order.orderNumber;
+    const currency = order.currency ?? appConfig.defaultCurrency;
+    const totalFormatted = new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency
+    }).format(order.totalAmount);
+
+    const placedDate = new Date(order.placedAt).toLocaleDateString();
+    const subject = `Your Kalaa invoice ${invoiceNumber}`;
+    const text = `Hi ${order.customer.firstName},\n\n` +
+      `Thank you for your order ${order.orderNumber} placed on ${placedDate}. ` +
+      `Your invoice ${invoiceNumber} totaling ${totalFormatted} is attached for your records.\n\n` +
+      "Warm regards,\nKalaa Shoes";
+
+    const html = `<!DOCTYPE html><html><body>` +
+      `<p>Hi ${order.customer.firstName},</p>` +
+      `<p>Thank you for your order <strong>${order.orderNumber}</strong> placed on <strong>${placedDate}</strong>.</p>` +
+      `<p>Your invoice <strong>${invoiceNumber}</strong> totaling <strong>${totalFormatted}</strong> is attached for your records.</p>` +
+      `<p>Warm regards,<br/>Kalaa Shoes</p>` +
+      `</body></html>`;
+
+    await sendMail({
+      to: order.customer.email,
+      subject,
+      text,
+      html,
+      attachments: [
+        {
+          filename: path.basename(invoiceAbsolutePath),
+          path: invoiceAbsolutePath
+        }
+      ]
+    });
+  } catch (error) {
+    console.error("Failed to send invoice email", { orderId: order.id, error });
+  }
 };
 
 const createOrderEvent = async (
@@ -811,6 +941,9 @@ const renderInvoicePdf = (
   invoiceNumber: string,
   filePath: string
 ) => {
+  const normalizedCurrency = order.currency?.trim() ?? "";
+  const currencyLabel = normalizedCurrency.toUpperCase() === "INR" ? "₹" : normalizedCurrency || "INR";
+
   return new Promise<void>((resolve, reject) => {
     const doc = new PDFDocument({ size: "A4", margin: 48 });
     const stream = createWriteStream(filePath);
@@ -870,15 +1003,18 @@ const renderInvoicePdf = (
     let position = tableTop + 24;
 
     order.items.forEach((item) => {
-      const lineTotal = item.unitPrice * item.quantity - (item.discount ?? 0) + (item.tax ?? 0);
+      const unitPrice = Number(item.unitPrice ?? 0);
+      const discount = Number(item.discount ?? 0);
+      const tax = Number(item.tax ?? 0);
+      const lineTotal = unitPrice * item.quantity - discount + tax;
       doc.font("Helvetica").text(item.sku, 72, position);
       doc.text(item.productName, 140, position, { width: 200 });
       doc.text(String(item.quantity), 360, position, { width: 40, align: "right" });
-      doc.text(`${order.currency} ${item.unitPrice.toFixed(2)}`, 410, position, {
+      doc.text(`${currencyLabel} ${unitPrice.toFixed(2)}`, 410, position, {
         width: 80,
         align: "right"
       });
-      doc.text(`${order.currency} ${lineTotal.toFixed(2)}`, 500, position, {
+      doc.text(`${currencyLabel} ${lineTotal.toFixed(2)}`, 500, position, {
         width: 80,
         align: "right"
       });
@@ -887,7 +1023,7 @@ const renderInvoicePdf = (
 
     doc.moveTo(72, position + 4).lineTo(560, position + 4).stroke();
     doc.font("Helvetica-Bold").text(
-      `Total: ${order.currency} ${order.totalAmount.toFixed(2)}`,
+      `Total: ${currencyLabel} ${Number(order.totalAmount ?? 0).toFixed(2)}`,
       400,
       position + 12,
       { align: "right" }
@@ -916,7 +1052,11 @@ export const upsertInvoiceForOrder = async (orderId: string) => {
         .slice(0, 6)
         .toUpperCase()}`;
 
-    const fileName = `${invoiceNumber}.pdf`;
+    const previousAbsolute = order.invoice?.pdfPath
+      ? path.resolve(process.cwd(), order.invoice.pdfPath)
+      : null;
+
+    const fileName = buildInvoiceFileName(order, invoiceNumber);
     const absolutePath = path.join(appConfig.uploads.invoices, fileName);
     await renderInvoicePdf(order, invoiceNumber, absolutePath);
     const relativePath = path.relative(process.cwd(), absolutePath);
@@ -957,6 +1097,12 @@ export const upsertInvoiceForOrder = async (orderId: string) => {
       invoiceNumber,
       pdfPath: relativePath
     });
+
+    if (previousAbsolute && previousAbsolute !== absolutePath) {
+      await fs.unlink(previousAbsolute).catch(() => {
+        /* noop: old artifact */
+      });
+    }
 
     return {
       ...order,
@@ -1028,7 +1174,10 @@ export const updateOrderStatus = async (orderId: string, nextStatus: string, act
           'STATUS_UPDATED',
           $2,
           NULL,
-          jsonb_build_object('previousStatus', $3, 'nextStatus', $4)
+          jsonb_build_object(
+            'previousStatus', $3::text,
+            'nextStatus', $4::text
+          )
         )
       `,
       [orderId, actor, currentStatus, normalizedStatus]
@@ -1054,6 +1203,10 @@ export const deleteOrder = async (orderId: string) => {
       "SELECT pdf_path FROM invoices WHERE order_id = $1",
       [orderId]
     );
+
+    await releaseInventoryForOrder(client, orderId);
+
+    await client.query("DELETE FROM inventory_events WHERE order_id = $1", [orderId]);
 
     const deleteResult = await client.query("DELETE FROM orders WHERE id = $1", [orderId]);
     if (!deleteResult.rowCount) {

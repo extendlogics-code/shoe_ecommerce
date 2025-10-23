@@ -9,6 +9,7 @@ type FormState = {
   addressLine: string;
   city: string;
   state: string;
+  postalCode: string;
   phone: string;
   email: string;
 };
@@ -20,6 +21,7 @@ const initialForm: FormState = {
   addressLine: "",
   city: "",
   state: "",
+  postalCode: "",
   phone: "",
   email: ""
 };
@@ -29,9 +31,13 @@ type PendingOrder = {
   form: FormState;
   items: {
     id: string;
+    productId: string;
     name: string;
     quantity: number;
     price: number;
+    size?: string | null;
+    color?: string | null;
+    sku?: string | null;
   }[];
   subtotal: number;
 };
@@ -70,6 +76,12 @@ const CheckoutPage = () => {
     if (!form.state.trim()) {
       nextErrors.state = "State is required.";
     }
+    const postalPattern = /^[0-9]{6}$/;
+    if (!form.postalCode.trim()) {
+      nextErrors.postalCode = "PIN code is required.";
+    } else if (!postalPattern.test(form.postalCode.trim())) {
+      nextErrors.postalCode = "Enter a valid 6-digit PIN code.";
+    }
 
     const phonePattern = /^[0-9+\-\s()]{7,}$/;
     if (!form.phone.trim()) {
@@ -104,14 +116,28 @@ const CheckoutPage = () => {
       return;
     }
 
+    const sanitizedForm: FormState = {
+      fullName: form.fullName.trim(),
+      addressLine: form.addressLine.trim(),
+      city: form.city.trim(),
+      state: form.state.trim(),
+      postalCode: form.postalCode.trim(),
+      phone: form.phone.trim(),
+      email: form.email.trim()
+    };
+
     const snapshot: PendingOrder = {
       id: `KALAA-${Date.now()}`,
-      form,
+      form: sanitizedForm,
       items: items.map((item) => ({
         id: item.id,
+        productId: item.productId ?? item.id,
         name: item.name,
         quantity: item.quantity,
-        price: item.price
+        price: item.price,
+        size: item.size ?? null,
+        color: item.color ?? null,
+        sku: item.sku ?? null
       })),
       subtotal
     };
@@ -168,19 +194,23 @@ const CheckoutPage = () => {
 
       const itemsPayload = pendingOrder.items.map((item) => {
         const product =
-          bySku.get(item.id) ||
-          byId.get(item.id) ||
+          (item.productId && byId.get(item.productId)) ||
+          (item.sku && bySku.get(item.sku)) ||
           catalog.find((entry) => entry.name.trim().toLowerCase() === item.name.trim().toLowerCase());
         if (!product) {
-          throw new Error(`Product "${item.name}" could not be matched with the live catalogue.`);
+          throw new Error(
+            `Product "${item.name}" (cart ref: ${item.productId}) could not be matched with the live catalogue.`
+          );
         }
         return {
           productId: product.id,
-          sku: product.sku,
+          sku: product.sku ?? item.sku ?? product.id,
           quantity: item.quantity,
           unitPrice: item.price,
           discount: 0,
-          tax: 0
+          tax: 0,
+          size: item.size ? item.size.trim() : null,
+          color: item.color ? item.color.trim() : null
         };
       });
 
@@ -193,7 +223,7 @@ const CheckoutPage = () => {
         line2: "",
         city: completedOrder.form.city,
         state: completedOrder.form.state,
-        postalCode: "000000",
+        postalCode: completedOrder.form.postalCode.trim(),
         country: "IN"
       };
 
@@ -290,6 +320,8 @@ const CheckoutPage = () => {
                   <br />
                   {orderDetails.form.city}, {orderDetails.form.state}
                   <br />
+                  PIN {orderDetails.form.postalCode}
+                  <br />
                   {orderDetails.form.phone}
                 </p>
               </div>
@@ -298,9 +330,18 @@ const CheckoutPage = () => {
                 <ul>
                   {orderDetails.items.map((item) => (
                     <li key={item.id}>
-                      <span>
-                        {item.name} × {item.quantity}
-                      </span>
+                      <div>
+                        <span>
+                          {item.name} × {item.quantity}
+                        </span>
+                        {(item.size || item.color) && (
+                          <span className="checkout-page__item-meta">
+                            {[item.size ? `Size ${item.size}` : null, item.color ? `Color ${item.color}` : null]
+                              .filter(Boolean)
+                              .join(" • ")}
+                          </span>
+                        )}
+                      </div>
                       <span>{formatCurrency(item.price * item.quantity)}</span>
                     </li>
                   ))}
@@ -389,6 +430,20 @@ const CheckoutPage = () => {
                 {errors.state && <span className="checkout-page__error">{errors.state}</span>}
               </div>
             </div>
+            <div className="checkout-page__field">
+              <label htmlFor="postalCode">PIN code</label>
+              <input
+                id="postalCode"
+                name="postalCode"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={6}
+                value={form.postalCode}
+                onChange={handleChange}
+                required
+              />
+              {errors.postalCode && <span className="checkout-page__error">{errors.postalCode}</span>}
+            </div>
             <div className="checkout-page__field-grid">
               <div className="checkout-page__field">
                 <label htmlFor="phone">Phone</label>
@@ -415,6 +470,13 @@ const CheckoutPage = () => {
                   <div>
                     <span>{item.name}</span>
                     <small>Qty {item.quantity}</small>
+                    {(item.size || item.color) && (
+                      <span className="checkout-page__item-meta">
+                        {[item.size ? `Size ${item.size}` : null, item.color ? `Color ${item.color}` : null]
+                          .filter(Boolean)
+                          .join(" • ")}
+                      </span>
+                    )}
                   </div>
                   <span>{formatCurrency(item.price * item.quantity)}</span>
                 </li>

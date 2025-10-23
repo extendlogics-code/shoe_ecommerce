@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS customer_addresses (
   line2 TEXT,
   city TEXT NOT NULL,
   state TEXT,
-  postal_code TEXT NOT NULL,
+  postal_code TEXT NOT NULL CHECK (postal_code ~ '^[0-9]{6}$'),
   country TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -137,7 +137,7 @@ CREATE TABLE IF NOT EXISTS invoices (
 CREATE TABLE IF NOT EXISTS inventory_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-  order_id UUID REFERENCES orders(id) DEFERRABLE INITIALLY DEFERRED,
+  order_id UUID REFERENCES orders(id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED,
   event_type TEXT NOT NULL,
   delta INTEGER NOT NULL,
   source TEXT NOT NULL,

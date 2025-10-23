@@ -4,14 +4,25 @@ import type { Product, ProductSummary } from "../data/products";
 
 type CartItem = {
   id: string;
+  productId: string;
   name: string;
   price: number;
   image: string;
   quantity: number;
+  size?: string | null;
+  color?: string | null;
+  sku?: string | null;
+};
+
+type CartItemOptions = {
+  size?: string | null;
+  color?: string | null;
+  productId?: string;
+  sku?: string | null;
 };
 
 type CartAction =
-  | { type: "ADD_ITEM"; payload: { product: Product | ProductSummary; quantity?: number } }
+  | { type: "ADD_ITEM"; payload: { product: Product | ProductSummary; quantity?: number; options?: CartItemOptions } }
   | { type: "REMOVE_ITEM"; payload: { id: string } }
   | { type: "UPDATE_QUANTITY"; payload: { id: string; quantity: number } }
   | { type: "CLEAR_CART" };
@@ -27,12 +38,18 @@ const initialState: CartState = {
 const cartReducer = (state: CartState, action: CartAction): CartState => {
   switch (action.type) {
     case "ADD_ITEM": {
-      const { product, quantity = 1 } = action.payload;
-      const existing = state.items.find((item) => item.id === product.id);
+      const { product, quantity = 1, options } = action.payload;
+      const normalizedSize = options?.size?.trim() || null;
+      const normalizedColor = options?.color?.trim() || null;
+      const existing = state.items.find(
+        (item) => item.id === product.id && item.size === normalizedSize && item.color === normalizedColor
+      );
       if (existing) {
         return {
           items: state.items.map((item) =>
-            item.id === product.id ? { ...item, quantity: item.quantity + quantity } : item
+            item.id === product.id && item.size === normalizedSize && item.color === normalizedColor
+              ? { ...item, quantity: item.quantity + quantity }
+              : item
           )
         };
       }
@@ -41,10 +58,14 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
           ...state.items,
           {
             id: product.id,
+            productId: options?.productId ?? product.id,
             name: product.name,
             price: product.price,
             image: product.image,
-            quantity
+            quantity,
+            size: normalizedSize,
+            color: normalizedColor,
+            sku: options?.sku ?? ("sku" in product ? (product as unknown as { sku?: string }).sku ?? null : null)
           }
         ]
       };
@@ -68,7 +89,7 @@ type CartContextValue = {
   items: CartItem[];
   totalItems: number;
   subtotal: number;
-  addItem: (product: Product | ProductSummary, quantity?: number) => void;
+  addItem: (product: Product | ProductSummary, quantity?: number, options?: CartItemOptions) => void;
   removeItem: (id: string) => void;
   updateQuantity: (id: string, quantity: number) => void;
   clearCart: () => void;
@@ -87,7 +108,8 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       items: state.items,
       subtotal,
       totalItems,
-      addItem: (product, quantity = 1) => dispatch({ type: "ADD_ITEM", payload: { product, quantity } }),
+      addItem: (product, quantity = 1, options) =>
+        dispatch({ type: "ADD_ITEM", payload: { product, quantity, options } }),
       removeItem: (id: string) => dispatch({ type: "REMOVE_ITEM", payload: { id } }),
       updateQuantity: (id, quantity) =>
         dispatch({ type: "UPDATE_QUANTITY", payload: { id, quantity: Math.max(1, quantity) } }),
