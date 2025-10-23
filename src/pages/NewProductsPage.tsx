@@ -1,4 +1,4 @@
-import { ChangeEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import "../styles/customization.css";
@@ -99,6 +99,38 @@ type CategoryFilter = {
 const PLACEHOLDER_IMAGE =
   "https://dummyimage.com/640x800/e8dcd2/2e1b12&text=Kalaa+Product";
 
+const HEX_COLOR_PATTERN = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
+
+const expandHex = (hex: string) => {
+  const normalized = hex.startsWith("#") ? hex.slice(1) : hex;
+  if (normalized.length === 3) {
+    return normalized
+      .split("")
+      .map((char) => `${char}${char}`)
+      .join("");
+  }
+  return normalized;
+};
+
+const hexToRgb = (hex: string) => {
+  const expanded = expandHex(hex);
+  const r = parseInt(expanded.slice(0, 2), 16);
+  const g = parseInt(expanded.slice(2, 4), 16);
+  const b = parseInt(expanded.slice(4, 6), 16);
+  return { r, g, b };
+};
+
+const hexToRgba = (hex: string, alpha: number) => {
+  const { r, g, b } = hexToRgb(hex);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
+const pickTextColor = (hex: string) => {
+  const { r, g, b } = hexToRgb(hex);
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+  return brightness > 165 ? "#2e1b12" : "#ffffff";
+};
+
 const resolveImagePath = (imagePath: string | null) => {
   if (!imagePath) {
     return PLACEHOLDER_IMAGE;
@@ -165,6 +197,24 @@ const NewProductsPage = () => {
   const [categoriesData, setCategoriesData] = useState<ApiCategorySummary[]>([]);
   const navigate = useNavigate();
   const { addItem } = useCart();
+
+  const buyNowButtonStyle = useMemo(() => {
+    if (!selectedColor) {
+      return undefined;
+    }
+    const normalized = selectedColor.trim();
+    if (!HEX_COLOR_PATTERN.test(normalized)) {
+      return undefined;
+    }
+    const colorHex = normalized.startsWith("#") ? normalized : `#${normalized}`;
+    const textColor = pickTextColor(colorHex);
+    return {
+      background: colorHex,
+      color: textColor,
+      border: `1px solid ${hexToRgba(colorHex, 0.45)}`,
+      boxShadow: `0 12px 28px ${hexToRgba(colorHex, 0.24)}`
+    } satisfies CSSProperties;
+  }, [selectedColor]);
 
   useEffect(() => {
     let cancelled = false;
@@ -673,7 +723,7 @@ const NewProductsPage = () => {
                       {selectedProduct.colors.map((color) => {
                         const normalized = color.trim();
                         const isSelected = selectedColor === color;
-                        const isHex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(normalized);
+                        const isHex = HEX_COLOR_PATTERN.test(normalized);
                         const swatchStyle = isHex ? { backgroundColor: normalized } : undefined;
                         return (
                           <button
@@ -718,7 +768,12 @@ const NewProductsPage = () => {
                   <button type="button" className="button button--primary" onClick={handleAddToCart}>
                     Add to cart
                   </button>
-                  <button type="button" className="button button--ghost" onClick={handleBuyNow}>
+                  <button
+                    type="button"
+                    className="button button--ghost"
+                    onClick={handleBuyNow}
+                    style={buyNowButtonStyle}
+                  >
                     Buy now
                   </button>
                 </div>

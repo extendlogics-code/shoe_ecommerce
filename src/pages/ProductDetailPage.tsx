@@ -47,6 +47,8 @@ type ViewProduct = {
   categoryDescription?: string | null;
   badge?: string;
   colors: number;
+  colorOptions: string[];
+  sizeOptions: string[];
 };
 
 const resolveImagePath = (imagePath: string | null) => {
@@ -76,7 +78,12 @@ const mapProduct = (product: ApiProduct): ViewProduct => {
     navLabel: product.categoryNavLabel ?? null,
     description: product.categoryDescription ?? null
   });
-  const colorOptions = Array.isArray(product.colors) ? product.colors.filter(Boolean) : [];
+  const colorOptions = Array.isArray(product.colors)
+    ? product.colors.map((color) => color?.trim()).filter((color): color is string => Boolean(color && color.length))
+    : [];
+  const sizeOptions = Array.isArray(product.sizes)
+    ? product.sizes.map((size) => size?.trim()).filter((size): size is string => Boolean(size && size.length))
+    : [];
   const galleryImage = resolveImagePath(product.imagePath);
   return {
     id: product.id,
@@ -96,7 +103,9 @@ const mapProduct = (product: ApiProduct): ViewProduct => {
     categoryNavLabel: presentation.navLabel,
     categoryDescription: presentation.description,
     badge: formatBadge(product.status),
-    colors: colorOptions.length
+    colors: colorOptions.length,
+    colorOptions,
+    sizeOptions
   };
 };
 
@@ -106,6 +115,10 @@ const ProductDetailPage = () => {
   const { addItem } = useCart();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
+  const [selectedSize, setSelectedSize] = useState<string | null>(null);
+  const [sizeError, setSizeError] = useState<string | null>(null);
+  const [selectedColor, setSelectedColor] = useState<string | null>(null);
+  const [colorError, setColorError] = useState<string | null>(null);
   const [product, setProduct] = useState<ViewProduct | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -163,13 +176,68 @@ const ProductDetailPage = () => {
     setQuantity(1);
   }, [productId]);
 
+  useEffect(() => {
+    if (!product) {
+      setSelectedSize(null);
+      setSelectedColor(null);
+      setSizeError(null);
+      setColorError(null);
+      return;
+    }
+
+    const defaultSize = product.sizeOptions[0] ?? null;
+    const defaultColor = product.colorOptions[0] ?? null;
+    setSelectedSize(defaultSize);
+    setSelectedColor(defaultColor);
+    setSizeError(null);
+    setColorError(null);
+  }, [product]);
+
   const activeImage = useMemo(() => {
     const source = selectedImage ?? product?.gallery[0] ?? product?.image ?? null;
     return source ?? PLACEHOLDER_IMAGE;
   }, [product, selectedImage]);
 
+  const handleSizeSelect = (size: string) => {
+    setSelectedSize(size);
+    setSizeError(null);
+  };
+
+  const handleColorSelect = (color: string) => {
+    setSelectedColor(color);
+    setColorError(null);
+  };
+
+  const handleBack = () => {
+    if (typeof window !== "undefined" && window.history.state && window.history.state.idx > 0) {
+      navigate(-1);
+    } else {
+      navigate("/products");
+    }
+  };
+
+  const validateSelections = () => {
+    if (!product) {
+      return false;
+    }
+
+    let valid = true;
+    if (product.sizeOptions.length && !selectedSize) {
+      setSizeError("Please select a size");
+      valid = false;
+    }
+    if (product.colorOptions.length && !selectedColor) {
+      setColorError("Please select a color");
+      valid = false;
+    }
+    return valid;
+  };
+
   const handleAddToCart = () => {
     if (!product) {
+      return;
+    }
+    if (!validateSelections()) {
       return;
     }
     addItem(
@@ -183,7 +251,7 @@ const ProductDetailPage = () => {
         categoryLabel: product.categoryLabel
       },
       quantity,
-      { productId: product.id, sku: product.sku }
+      { productId: product.id, sku: product.sku, size: selectedSize, color: selectedColor }
     );
     navigate("/cart");
   };
@@ -192,6 +260,9 @@ const ProductDetailPage = () => {
     if (!product) {
       return;
     }
+    if (!validateSelections()) {
+      return;
+    }
     addItem(
       {
         id: product.id,
@@ -203,7 +274,7 @@ const ProductDetailPage = () => {
         categoryLabel: product.categoryLabel
       },
       quantity,
-      { productId: product.id, sku: product.sku }
+      { productId: product.id, sku: product.sku, size: selectedSize, color: selectedColor }
     );
     navigate("/checkout");
   };
@@ -255,6 +326,9 @@ const ProductDetailPage = () => {
         </div>
 
         <div className="product-detail__content">
+          <button type="button" className="product-detail__back" onClick={handleBack}>
+            Back
+          </button>
           <span className="eyebrow">{product.categoryLabel}</span>
           <h1>{product.name}</h1>
           <p className="product-detail__price">{formatCurrency(product.price, product.currency)}</p>
@@ -297,6 +371,58 @@ const ProductDetailPage = () => {
                   <li key={instruction}>{instruction}</li>
                 ))}
               </ul>
+            </div>
+          ) : null}
+
+          {product.sizeOptions.length ? (
+            <div className="product-detail__selector">
+              <span className="product-detail__selector-label">Size</span>
+              <div className="product-detail__selector-options">
+                {product.sizeOptions.map((size) => {
+                  const isSelected = selectedSize === size;
+                  return (
+                    <button
+                      key={size}
+                      type="button"
+                      className={`product-detail__selector-option${
+                        isSelected ? " product-detail__selector-option--selected" : ""
+                      }`}
+                      onClick={() => handleSizeSelect(size)}
+                    >
+                      {size}
+                    </button>
+                  );
+                })}
+              </div>
+              {sizeError ? <p className="product-detail__selector-error">{sizeError}</p> : null}
+            </div>
+          ) : null}
+
+          {product.colorOptions.length ? (
+            <div className="product-detail__selector">
+              <span className="product-detail__selector-label">Color</span>
+              <div className="product-detail__selector-options">
+                {product.colorOptions.map((color) => {
+                  const normalized = color.trim();
+                  const isSelected = selectedColor === color;
+                  const isHex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(normalized);
+                  const swatchStyle = isHex ? { backgroundColor: normalized } : undefined;
+                  return (
+                    <button
+                      key={color}
+                      type="button"
+                      className={`product-detail__selector-option product-detail__selector-option--color${
+                        isSelected ? " product-detail__selector-option--selected" : ""
+                      }`}
+                      onClick={() => handleColorSelect(color)}
+                    >
+                      <span className="product-detail__selector-swatch" style={swatchStyle} aria-hidden="true" />
+                      <span>{normalized}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {colorError ? <p className="product-detail__selector-error">{colorError}</p> : null}
             </div>
           ) : null}
 

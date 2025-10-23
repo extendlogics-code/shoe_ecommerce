@@ -15,6 +15,7 @@ type ApiProduct = {
   description: string | null;
   imagePath: string | null;
   colors: string[];
+  sizes?: string[];
   category: string | null;
   categoryLabel?: string | null;
   categoryNavLabel?: string | null;
@@ -28,7 +29,9 @@ type ViewProduct = {
   currency: string;
   image: string;
   badge?: string;
-  colors: number;
+  colorCount: number;
+  colorOptions: string[];
+  sizeOptions: string[];
   categoryLabel: string;
   categoryId: string;
 };
@@ -78,6 +81,12 @@ const mapProduct = (product: ApiProduct): ViewProduct => {
     navLabel: product.categoryNavLabel ?? null,
     description: product.categoryDescription ?? null
   });
+  const colorOptions = Array.isArray(product.colors)
+    ? product.colors.map((color) => color?.trim()).filter((color): color is string => Boolean(color && color.length))
+    : [];
+  const sizeOptions = Array.isArray(product.sizes)
+    ? product.sizes.map((size) => size?.trim()).filter((size): size is string => Boolean(size && size.length))
+    : [];
 
   return {
     id: product.id,
@@ -86,7 +95,9 @@ const mapProduct = (product: ApiProduct): ViewProduct => {
     currency: product.currency ?? "INR",
     image: resolveImagePath(product.imagePath),
     badge: formatBadge(product.status),
-    colors: Array.isArray(product.colors) ? product.colors.filter(Boolean).length : 0,
+    colorCount: colorOptions.length,
+    colorOptions,
+    sizeOptions,
     categoryLabel: categoryPresentation.label,
     categoryId: categoryPresentation.id
   };
@@ -98,6 +109,8 @@ const ProductsPage = () => {
   const [categoriesData, setCategoriesData] = useState<ApiCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedSize, setSelectedSize] = useState<string | null>(null);
+  const [selectedColor, setSelectedColor] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -131,12 +144,16 @@ const ProductsPage = () => {
             .filter((product) => product.categoryId !== "uncategorized");
           setProducts(mappedProducts);
           setCategoriesData(categoriesPayload);
+          setSelectedSize(null);
+          setSelectedColor(null);
         }
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "Unexpected error");
           setProducts([]);
           setCategoriesData([]);
+          setSelectedSize(null);
+          setSelectedColor(null);
         }
       } finally {
         if (!cancelled) {
@@ -226,19 +243,89 @@ const ProductsPage = () => {
     return exists ? categoryParam : categories[0]?.id ?? "";
   }, [categories, categoryParam]);
 
+  useEffect(() => {
+    setSelectedSize(null);
+    setSelectedColor(null);
+  }, [activeCategory]);
+
   const activeCategoryData =
     categories.find((category) => category.id === activeCategory) ?? categories[0] ?? null;
 
-  const productsForCategory = useMemo(
-    () =>
-      products.filter((product) =>
-        activeCategory ? product.categoryId === activeCategory : false
-      ),
-    [activeCategory, products]
-  );
+  const productsInActiveCategory = useMemo(() => {
+    if (!activeCategory) {
+      return [];
+    }
+    return products.filter((product) => product.categoryId === activeCategory);
+  }, [activeCategory, products]);
+
+  const availableSizes = useMemo(() => {
+    const seen = new Map<string, string>();
+    productsInActiveCategory.forEach((product) => {
+      product.sizeOptions.forEach((size) => {
+        const key = size.toLowerCase();
+        if (!seen.has(key)) {
+          seen.set(key, size);
+        }
+      });
+    });
+    return Array.from(seen.values()).sort((a, b) =>
+      a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" })
+    );
+  }, [productsInActiveCategory]);
+
+  const availableColors = useMemo(() => {
+    const seen = new Map<string, string>();
+    productsInActiveCategory.forEach((product) => {
+      product.colorOptions.forEach((color) => {
+        const key = color.toLowerCase();
+        if (!seen.has(key)) {
+          seen.set(key, color);
+        }
+      });
+    });
+    return Array.from(seen.values()).sort((a, b) =>
+      a.localeCompare(b, undefined, { sensitivity: "base" })
+    );
+  }, [productsInActiveCategory]);
+
+  useEffect(() => {
+    if (selectedSize && !availableSizes.includes(selectedSize)) {
+      setSelectedSize(null);
+    }
+  }, [availableSizes, selectedSize]);
+
+  useEffect(() => {
+    if (selectedColor && !availableColors.includes(selectedColor)) {
+      setSelectedColor(null);
+    }
+  }, [availableColors, selectedColor]);
+
+  const productsForCategory = useMemo(() => {
+    return productsInActiveCategory.filter((product) => {
+      const sizeMatch = selectedSize ? product.sizeOptions.includes(selectedSize) : true;
+      const colorMatch = selectedColor ? product.colorOptions.includes(selectedColor) : true;
+      return sizeMatch && colorMatch;
+    });
+  }, [productsInActiveCategory, selectedColor, selectedSize]);
 
   const handleCategoryClick = (categoryId: string) => {
     setSearchParams({ category: categoryId });
+  };
+
+  const handleSizeFilterClick = (size: string | null) => {
+    if (!size) {
+      setSelectedSize(null);
+      return;
+    }
+    setSelectedSize((prev) => (prev === size ? null : size));
+  };
+
+  const handleColorFilterClick = (color: string | null) => {
+    if (!color) {
+      setSelectedColor(null);
+      return;
+    }
+    setSelectedColor((prev) => (prev === color ? null : color));
   };
 
   return (
@@ -281,6 +368,70 @@ const ProductsPage = () => {
           ))}
         </nav>
 
+        {(!loading && (availableSizes.length || availableColors.length)) ? (
+          <section className="products-page__filters surface">
+            {availableSizes.length ? (
+              <div className="products-page__filter-group">
+                <span className="products-page__filter-label">Sizes</span>
+                <div className="products-page__filter-options">
+                  <button
+                    type="button"
+                    className="products-page__filter-option"
+                    data-active={selectedSize === null}
+                    onClick={() => handleSizeFilterClick(null)}
+                  >
+                    All
+                  </button>
+                  {availableSizes.map((size) => (
+                    <button
+                      key={size}
+                      type="button"
+                      className="products-page__filter-option"
+                      data-active={selectedSize === size}
+                      onClick={() => handleSizeFilterClick(size)}
+                    >
+                      {size}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {availableColors.length ? (
+              <div className="products-page__filter-group">
+                <span className="products-page__filter-label">Colors</span>
+                <div className="products-page__filter-options">
+                  <button
+                    type="button"
+                    className="products-page__filter-option products-page__filter-option--color"
+                    data-active={selectedColor === null}
+                    onClick={() => handleColorFilterClick(null)}
+                  >
+                    <span className="products-page__filter-swatch" aria-hidden="true" />
+                    <span>All</span>
+                  </button>
+                  {availableColors.map((color) => {
+                    const isHex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(color);
+                    const swatchStyle = isHex ? { backgroundColor: color } : undefined;
+                    return (
+                      <button
+                        key={color}
+                        type="button"
+                        className="products-page__filter-option products-page__filter-option--color"
+                        data-active={selectedColor === color}
+                        onClick={() => handleColorFilterClick(color)}
+                      >
+                        <span className="products-page__filter-swatch" style={swatchStyle} aria-hidden="true" />
+                        <span>{color}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+
         {loading ? (
           <div className="products-page__grid">
             <div className="products-page__empty">
@@ -305,8 +456,8 @@ const ProductsPage = () => {
                   </div>
                   <div className="product-card__meta">
                     <span className="product-card__price">{formatCurrency(product.price, product.currency)}</span>
-                    {product.colors > 1 && (
-                      <span className="product-card__colors">{product.colors} colorways</span>
+                    {product.colorCount > 1 && (
+                      <span className="product-card__colors">{product.colorCount} colorways</span>
                     )}
                   </div>
                 </div>
