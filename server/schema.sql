@@ -27,6 +27,17 @@ CREATE TABLE IF NOT EXISTS customer_addresses (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Product categories
+CREATE TABLE IF NOT EXISTS product_categories (
+  id TEXT PRIMARY KEY,
+  label TEXT NOT NULL,
+  nav_label TEXT NOT NULL,
+  description TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 100,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- Product catalog
 CREATE TABLE IF NOT EXISTS products (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -41,7 +52,7 @@ CREATE TABLE IF NOT EXISTS products (
   price NUMERIC(12, 2) NOT NULL,
   currency TEXT NOT NULL DEFAULT 'INR',
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('draft', 'active', 'inactive')),
-  category TEXT CHECK (category IN ('mens', 'womens', 'kids')),
+  category TEXT REFERENCES product_categories(id),
   image_primary_path TEXT,
   image_primary_alt TEXT,
   colorways TEXT[] NOT NULL DEFAULT '{}'::text[],
@@ -158,6 +169,12 @@ CREATE TABLE IF NOT EXISTS admin_users (
 DROP TRIGGER IF EXISTS set_admin_users_updated_at ON admin_users;
 CREATE TRIGGER set_admin_users_updated_at
 BEFORE UPDATE ON admin_users
+FOR EACH ROW
+EXECUTE FUNCTION set_updated_at();
+
+DROP TRIGGER IF EXISTS set_product_categories_updated_at ON product_categories;
+CREATE TRIGGER set_product_categories_updated_at
+BEFORE UPDATE ON product_categories
 FOR EACH ROW
 EXECUTE FUNCTION set_updated_at();
 

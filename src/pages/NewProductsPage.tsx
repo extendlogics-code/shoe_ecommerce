@@ -5,7 +5,16 @@ import "../styles/customization.css";
 import "../styles/product-details.css";
 import { formatCurrency } from "../utils/currency";
 import { useCart } from "../context/CartContext";
-import { CATEGORY_ORDER, WORKBENCH_CATEGORY_IDS, getCategoryMeta } from "../data/categoryMeta";
+import { DEFAULT_CATEGORY_ID, withCategoryPresentation } from "../data/categoryMeta";
+
+type ApiCategorySummary = {
+  id: string;
+  label: string;
+  navLabel: string;
+  description: string;
+  sortOrder: number;
+  total: number;
+};
 type CustomizationOption = {
   id: string;
   name: string;
@@ -41,6 +50,9 @@ type ApiProduct = {
   safetyStock: number | null;
   reorderPoint: number | null;
   category: string | null;
+  categoryLabel?: string | null;
+  categoryNavLabel?: string | null;
+  categoryDescription?: string | null;
   isCustomizable?: boolean;
   customizationOptions?: CustomizationOption[];
   angles?: string[];
@@ -79,7 +91,9 @@ type ViewProduct = {
 type CategoryFilter = {
   id: string;
   label: string;
+  description: string;
   count: number;
+  sortOrder: number;
 };
 
 const PLACEHOLDER_IMAGE =
@@ -96,7 +110,13 @@ const resolveImagePath = (imagePath: string | null) => {
 };
 
 const mapToViewProduct = (product: ApiProduct): ViewProduct => {
-  const meta = getCategoryMeta(product.category);
+  const presentation = withCategoryPresentation({
+    id: product.category,
+    label: product.categoryLabel ?? null,
+    navLabel: product.categoryNavLabel ?? null,
+    description: product.categoryDescription ?? null
+  });
+  const needsCategory = presentation.id === DEFAULT_CATEGORY_ID;
   return {
     id: product.id,
     sku: product.sku,
@@ -117,8 +137,8 @@ const mapToViewProduct = (product: ApiProduct): ViewProduct => {
     reserved: product.reserved ?? null,
     safetyStock: product.safetyStock ?? null,
     reorderPoint: product.reorderPoint ?? null,
-    categoryId: meta.id,
-    categoryLabel: meta.label,
+    categoryId: presentation.id,
+    categoryLabel: needsCategory ? "Latest arrival" : presentation.label,
     createdAt: product.createdAt,
     isCustomizable: product.isCustomizable ?? false,
     customizationOptions: product.customizationOptions ?? [],
@@ -142,6 +162,7 @@ const NewProductsPage = () => {
   const [currentAngle, setCurrentAngle] = useState(0);
   const [totalPrice, setTotalPrice] = useState(0);
   const [activeCategory, setActiveCategory] = useState<string>("all");
+  const [categoriesData, setCategoriesData] = useState<ApiCategorySummary[]>([]);
   const navigate = useNavigate();
   const { addItem } = useCart();
 
@@ -195,6 +216,40 @@ const NewProductsPage = () => {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadCategories = async () => {
+      try {
+        const response = await fetch("/api/products/categories");
+        if (!response.ok) {
+          if (!cancelled) {
+            setCategoriesData([]);
+          }
+          return;
+        }
+
+        const data = (await response.json()) as ApiCategorySummary[];
+        if (cancelled) {
+          return;
+        }
+
+        const filtered = data.filter((category) => category.id !== "uncategorized");
+        setCategoriesData(filtered);
+      } catch {
+        if (!cancelled) {
+          setCategoriesData([]);
+        }
+      }
+    };
+
+    void loadCategories();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const categoryFilters = useMemo<CategoryFilter[]>(() => {
     const counts = new Map<string, number>();
     products.forEach((product) => {
@@ -202,39 +257,39 @@ const NewProductsPage = () => {
       counts.set(key, (counts.get(key) ?? 0) + 1);
     });
 
-    const ids = new Set<string>([
-      ...WORKBENCH_CATEGORY_IDS,
-      ...Array.from(counts.keys()).filter(Boolean)
-    ]);
-
-    if (!ids.size) {
-      ids.add("uncategorized");
-    }
-
-    const ordered = Array.from(ids).sort((a, b) => {
-      const indexA = CATEGORY_ORDER.indexOf(a);
-      const indexB = CATEGORY_ORDER.indexOf(b);
-      if (indexA === -1 && indexB === -1) {
-        return a.localeCompare(b);
-      }
-      if (indexA === -1) {
-        return 1;
-      }
-      if (indexB === -1) {
-        return -1;
-      }
-      return indexA - indexB;
-    });
-
-    return ordered.map((id) => {
-      const meta = getCategoryMeta(id);
+    const filters = categoriesData.map((category) => {
+      const presented = withCategoryPresentation(category);
       return {
-        id: meta.id,
-        label: meta.label,
-        count: counts.get(meta.id) ?? 0
-      };
+        id: presented.id,
+        label: presented.label,
+        description: presented.description,
+        count: counts.get(presented.id) ?? category.total ?? 0,
+        sortOrder: category.sortOrder ?? 100
+      } satisfies CategoryFilter;
     });
-  }, [products]);
+
+    products.forEach((product) => {
+      if (!filters.some((filter) => filter.id === product.categoryId)) {
+        const presented = withCategoryPresentation({ id: product.categoryId, label: product.categoryLabel });
+        filters.push({
+          id: presented.id,
+          label: presented.label,
+          description: presented.description,
+          count: counts.get(presented.id) ?? 0,
+          sortOrder: 200
+        });
+      }
+    });
+
+    return filters
+      .filter((filter) => filter.id !== "uncategorized")
+      .sort((a, b) => {
+        if (a.sortOrder !== b.sortOrder) {
+          return a.sortOrder - b.sortOrder;
+        }
+        return a.label.localeCompare(b.label);
+      });
+  }, [categoriesData, products]);
 
   useEffect(() => {
     if (activeCategory !== "all" && !categoryFilters.some((category) => category.id === activeCategory)) {
@@ -434,10 +489,10 @@ const NewProductsPage = () => {
                       <img src={product.image} alt={product.name} loading="lazy" />
                     </figure>
                     <div className="product-card__info">
-                      <div>
-                        <h3>{product.name}</h3>
-                        <small className="new-products-page__category">{product.categoryLabel}</small>
-                      </div>
+                    <div>
+                      <h3>{product.name}</h3>
+                      {/* <small className="new-products-page__category"></small> */}
+                    </div>
                       <div className="product-card__meta">
                         <span className="product-card__price">{formatCurrency(product.price, product.currency)}</span>
                         {product.colors.length ? (

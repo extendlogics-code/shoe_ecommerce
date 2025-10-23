@@ -7,11 +7,11 @@ import {
   createProduct,
   deleteProductById,
   getProductById,
-  listProductCategories,
   listProducts,
   listRecentProducts,
   updateProduct
 } from "../services/productService";
+import { categoryExists, createCategory, listCategorySummaries } from "../services/categoryService";
 
 const router = Router();
 
@@ -52,6 +52,17 @@ const ensureSuperadmin = (req: Request, res: Response): boolean => {
   return true;
 };
 
+const normalizeCategoryId = (value?: string | null) => {
+  if (!value) {
+    return undefined;
+  }
+  const trimmed = value.trim().toLowerCase().replace(/\s+/g, "-");
+  if (!trimmed.length) {
+    return undefined;
+  }
+  return /^[a-z0-9-]+$/.test(trimmed) ? trimmed : undefined;
+};
+
 router.get("/", async (req, res, next) => {
   try {
     const category = typeof req.query.category === "string" ? req.query.category : undefined;
@@ -75,8 +86,55 @@ router.get("/new", async (req, res, next) => {
 
 router.get("/categories", async (_req, res, next) => {
   try {
-    const categories = await listProductCategories();
+    const categories = await listCategorySummaries();
     res.json(categories);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/categories", async (req, res, next) => {
+  if (!ensureSuperadmin(req, res)) {
+    return;
+  }
+
+  try {
+    const { id, label, navLabel, description, sortOrder } = req.body as {
+      id?: string;
+      label?: string;
+      navLabel?: string;
+      description?: string;
+      sortOrder?: string | number;
+    };
+
+    if (!id || !label || !navLabel || !description) {
+      res.status(400).json({ message: "Category id, label, navLabel, and description are required" });
+      return;
+    }
+
+    const normalizedId = normalizeCategoryId(id);
+    if (!normalizedId) {
+      res.status(400).json({ message: "Category id must contain alphanumeric characters" });
+      return;
+    }
+
+    const exists = await categoryExists(normalizedId);
+    if (exists) {
+      res.status(409).json({ message: `Category ${normalizedId} already exists` });
+      return;
+    }
+
+    const parsedSortOrder = sortOrder === undefined ? undefined : Number(sortOrder);
+
+    const category = await createCategory({
+      id: normalizedId,
+      label: String(label).trim(),
+      navLabel: String(navLabel).trim(),
+      description: String(description).trim(),
+      sortOrder: Number.isNaN(parsedSortOrder) ? undefined : parsedSortOrder
+    });
+
+    res.status(201).json(category);
   } catch (error) {
     next(error);
   }
@@ -137,7 +195,7 @@ router.post("/", upload.single("image"), async (req, res, next) => {
       imageAlt, 
       colors, 
       sizes, 
-      category 
+      category: categoryInput 
     } = req.body;
 
     const priceValue = Number(price);
@@ -146,9 +204,13 @@ router.post("/", upload.single("image"), async (req, res, next) => {
       return;
     }
 
-    if (category && !['mens', 'womens', 'kids'].includes(category)) {
-      res.status(400).json({ message: "Invalid category value. Must be one of: mens, womens, kids" });
-      return;
+    const category = normalizeCategoryId(categoryInput);
+    if (category) {
+      const exists = await categoryExists(category);
+      if (!exists) {
+        res.status(400).json({ message: `Unknown category: ${categoryInput ?? ""}` });
+        return;
+      }
     }
 
     const product = await createProduct({
@@ -213,7 +275,7 @@ router.put("/:productId", upload.single("image"), async (req, res, next) => {
       price,
       currency,
       status,
-      category,
+      category: categoryInput,
       inventoryOnHand,
       inventoryReserved,
       safetyStock,
@@ -229,9 +291,13 @@ router.put("/:productId", upload.single("image"), async (req, res, next) => {
       return;
     }
 
-    if (category && !['mens', 'womens', 'kids'].includes(category)) {
-      res.status(400).json({ message: "Invalid category value. Must be one of: mens, womens, kids" });
-      return;
+    const category = normalizeCategoryId(categoryInput);
+    if (category) {
+      const exists = await categoryExists(category);
+      if (!exists) {
+        res.status(400).json({ message: `Unknown category: ${categoryInput ?? ""}` });
+        return;
+      }
     }
 
     const product = await updateProduct(req.params.productId, {

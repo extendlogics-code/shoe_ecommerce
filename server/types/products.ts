@@ -10,7 +10,7 @@ export interface ProductInput {
   price: number;
   currency?: string;
   status?: "draft" | "active" | "inactive";
-  category?: "mens" | "womens" | "kids";
+  category?: string;
   colors: string[];
   sizes: string[];
   inventory: {

@@ -5,10 +5,14 @@ import { primaryNav } from "../data/navigation";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { useCart } from "../context/CartContext";
-import { CATEGORY_ORDER, WORKBENCH_CATEGORY_IDS, getCategoryMeta } from "../data/categoryMeta";
+import { DEFAULT_CATEGORY_ID, withCategoryPresentation } from "../data/categoryMeta";
 
 type ApiCategorySummary = {
-  category: string | null;
+  id: string;
+  label: string;
+  navLabel: string;
+  description: string;
+  sortOrder: number;
   total: number;
 };
 
@@ -19,44 +23,32 @@ type NavItem = {
   categoryId?: string;
 };
 
-const buildCategoryNavItems = (categories: string[]): NavItem[] => {
-  const unique = Array.from(
-    new Set(
-      categories
-        .filter((value): value is string => Boolean(value))
-        .map((value) => value.trim().toLowerCase())
-        .filter(Boolean)
-    )
-  );
+const DEFAULT_CATEGORIES: ApiCategorySummary[] = [
+  { id: "womens", label: "Women", navLabel: "Women", description: "", sortOrder: 10, total: 0 },
+  { id: "mens", label: "Men", navLabel: "Men", description: "", sortOrder: 20, total: 0 },
+  { id: "kids", label: "Kids", navLabel: "Kids", description: "", sortOrder: 30, total: 0 }
+];
 
-  unique.sort((a, b) => {
-    const indexA = CATEGORY_ORDER.indexOf(a);
-    const indexB = CATEGORY_ORDER.indexOf(b);
-    if (indexA === -1 && indexB === -1) {
-      return a.localeCompare(b);
-    }
-    if (indexA === -1) {
-      return 1;
-    }
-    if (indexB === -1) {
-      return -1;
-    }
-    return indexA - indexB;
-  });
-
-  return unique.map((id) => {
-    const meta = getCategoryMeta(id);
-    return {
-      label: meta.navLabel,
-      path: `/products?category=${meta.id}`,
-      categoryId: meta.id
-    };
-  });
+const buildCategoryNavItems = (categories: ApiCategorySummary[]): NavItem[] => {
+  return categories
+    .map((category) => ({ category, presentation: withCategoryPresentation(category) }))
+    .filter(({ presentation }) => presentation.id !== DEFAULT_CATEGORY_ID)
+    .sort((a, b) => {
+      if (a.category.sortOrder !== b.category.sortOrder) {
+        return a.category.sortOrder - b.category.sortOrder;
+      }
+      return a.presentation.label.localeCompare(b.presentation.label);
+    })
+    .map(({ category, presentation }) => ({
+      label: presentation.navLabel,
+      path: `/products?category=${presentation.id}`,
+      categoryId: presentation.id
+    }));
 };
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [categoryNav, setCategoryNav] = useState<NavItem[]>(() => buildCategoryNavItems(WORKBENCH_CATEGORY_IDS));
+  const [categoryNav, setCategoryNav] = useState<NavItem[]>(() => buildCategoryNavItems(DEFAULT_CATEGORIES));
   const { totalItems } = useCart();
   const location = useLocation();
   const navigate = useNavigate();
@@ -69,7 +61,7 @@ const Header = () => {
         const response = await fetch("/api/products/categories");
         if (!response.ok) {
           if (!cancelled) {
-            setCategoryNav(buildCategoryNavItems(WORKBENCH_CATEGORY_IDS));
+            setCategoryNav(buildCategoryNavItems(DEFAULT_CATEGORIES));
           }
           return;
         }
@@ -78,14 +70,12 @@ const Header = () => {
         if (cancelled) {
           return;
         }
-        const ids = [
-          ...WORKBENCH_CATEGORY_IDS,
-          ...data.map((entry) => entry.category).filter((value): value is string => Boolean(value))
-        ];
-        setCategoryNav(buildCategoryNavItems(ids));
+
+        const filtered = data.filter((category) => category.id && category.id !== DEFAULT_CATEGORY_ID);
+        setCategoryNav(buildCategoryNavItems(filtered));
       } catch {
         if (!cancelled) {
-          setCategoryNav(buildCategoryNavItems(WORKBENCH_CATEGORY_IDS));
+          setCategoryNav(buildCategoryNavItems(DEFAULT_CATEGORIES));
         }
       }
     };

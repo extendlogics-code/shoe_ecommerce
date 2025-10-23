@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { formatCurrency } from "../utils/currency";
 import { useCart } from "../context/CartContext";
-import { getCategoryMeta } from "../data/categoryMeta";
+import { DEFAULT_CATEGORY_ID, withCategoryPresentation } from "../data/categoryMeta";
 
 const PLACEHOLDER_IMAGE = "https://dummyimage.com/640x800/e8dcd2/2e1b12&text=Kalaa+Product";
 
@@ -23,6 +23,9 @@ type ApiProduct = {
   colors: string[];
   sizes: string[];
   category: string | null;
+  categoryLabel?: string | null;
+  categoryNavLabel?: string | null;
+  categoryDescription?: string | null;
 };
 
 type ViewProduct = {
@@ -40,6 +43,8 @@ type ViewProduct = {
   careInstructions: string[];
   features: string[];
   categoryLabel: string;
+  categoryNavLabel?: string;
+  categoryDescription?: string | null;
   badge?: string;
   colors: number;
 };
@@ -65,7 +70,12 @@ const formatBadge = (status: string) => {
 };
 
 const mapProduct = (product: ApiProduct): ViewProduct => {
-  const meta = getCategoryMeta(product.category);
+  const presentation = withCategoryPresentation({
+    id: product.category,
+    label: product.categoryLabel ?? null,
+    navLabel: product.categoryNavLabel ?? null,
+    description: product.categoryDescription ?? null
+  });
   const colorOptions = Array.isArray(product.colors) ? product.colors.filter(Boolean) : [];
   const galleryImage = resolveImagePath(product.imagePath);
   return {
@@ -82,7 +92,9 @@ const mapProduct = (product: ApiProduct): ViewProduct => {
     materialInfo: product.materialInfo ?? null,
     careInstructions: product.careInstructions?.filter((entry) => entry && entry.trim().length) ?? [],
     features: product.features?.filter((entry) => entry && entry.trim().length) ?? [],
-    categoryLabel: meta.label,
+    categoryLabel: presentation.id === DEFAULT_CATEGORY_ID ? "Latest arrival" : presentation.label,
+    categoryNavLabel: presentation.navLabel,
+    categoryDescription: presentation.description,
     badge: formatBadge(product.status),
     colors: colorOptions.length
   };

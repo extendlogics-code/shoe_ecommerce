@@ -1,6 +1,7 @@
 import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { formatCurrency } from "../utils/currency";
+import { DEFAULT_CATEGORY_ID, withCategoryPresentation } from "../data/categoryMeta";
 
 type ProductRow = {
   id: string;
@@ -23,6 +24,7 @@ type ProductRow = {
   safetyStock: number;
   reorderPoint: number;
   category: string | null;
+  categoryLabel?: string | null;
 };
 
 type FormState = {
@@ -46,6 +48,27 @@ type FormState = {
   category: string;
   file?: File;
 };
+
+type ApiCategorySummary = {
+  id: string;
+  label: string;
+  navLabel: string;
+  description: string;
+  sortOrder: number;
+  total: number;
+};
+
+type CategoryOption = {
+  id: string;
+  label: string;
+  sortOrder: number;
+};
+
+const DEFAULT_CATEGORY_OPTIONS: CategoryOption[] = [
+  { id: "womens", label: "Women", sortOrder: 10 },
+  { id: "mens", label: "Men", sortOrder: 20 },
+  { id: "kids", label: "Kids", sortOrder: 30 }
+];
 
 const initialFormState: FormState = {
   name: "",
@@ -71,6 +94,7 @@ const initialFormState: FormState = {
 const ProductAdminPage = () => {
   const [form, setForm] = useState<FormState>(initialFormState);
   const [products, setProducts] = useState<ProductRow[]>([]);
+  const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -113,6 +137,37 @@ const ProductAdminPage = () => {
     }
   }, []);
 
+  const loadCategories = useCallback(async () => {
+    try {
+      const response = await fetch("/api/products/categories");
+      if (!response.ok) {
+        throw new Error("Unable to load categories");
+      }
+
+      const data = (await response.json()) as ApiCategorySummary[];
+      const options = data
+        .filter((category) => category.id && category.id !== DEFAULT_CATEGORY_ID)
+        .map((category) => {
+          const presentation = withCategoryPresentation(category);
+          return {
+            id: presentation.id,
+            label: presentation.label,
+            sortOrder: category.sortOrder ?? 100
+          } satisfies CategoryOption;
+        })
+        .sort((a, b) => {
+          if (a.sortOrder !== b.sortOrder) {
+            return a.sortOrder - b.sortOrder;
+          }
+          return a.label.localeCompare(b.label);
+        });
+
+      setCategoryOptions(options.length ? options : DEFAULT_CATEGORY_OPTIONS);
+    } catch {
+      setCategoryOptions(DEFAULT_CATEGORY_OPTIONS);
+    }
+  }, []);
+
   useEffect(() => {
     const isAuthenticated = localStorage.getItem("adminAuthenticated") === "true";
     const storedRole = localStorage.getItem("adminRole");
@@ -125,7 +180,8 @@ const ProductAdminPage = () => {
     setRole(normalizedRole);
     setAdminEmail(localStorage.getItem("adminEmail"));
     void loadProducts();
-  }, [loadProducts, navigate]);
+    void loadCategories();
+  }, [loadCategories, loadProducts, navigate]);
 
   const isSuperAdmin = role === "superadmin";
   const roleResolved = role !== null;
@@ -563,20 +619,29 @@ const ProductAdminPage = () => {
                   />
                 </div>
                 <div className="admin-form__row">
-                  <label htmlFor="category">Category</label>
-                  <select
-                    id="category"
-                    name="category"
-                    value={form.category}
-                    onChange={handleInputChange}
-                    required
+                <label htmlFor="category">Category</label>
+                <select
+                  id="category"
+                  name="category"
+                  value={form.category}
+                  onChange={handleInputChange}
+                  required
+                >
+                  <option value="">Select a category</option>
+                  {categoryOptions.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                {categoryOptions.length === 0 ? (
+                  <small
+                    style={{ display: "block", marginTop: "4px", color: "var(--color-muted)", fontSize: "0.85rem" }}
                   >
-                    <option value="">Select a category</option>
-                    <option value="mens">Men's</option>
-                    <option value="womens">Women's</option>
-                    <option value="kids">Kids</option>
-                  </select>
-                </div>
+                    No categories available. Add categories in the Product Workbench setup.
+                  </small>
+                ) : null}
+              </div>
               </div>
               <div className="admin-form__row">
                 <label htmlFor="description">Short Description</label>
@@ -754,7 +819,7 @@ Durable rubber outsole"
                       <td>
                       <div className="admin-table__primary">
                         <span className="admin-table__muted">
-                          Category: {product.category ? product.category.charAt(0).toUpperCase() + product.category.slice(1) : "—"}
+                          Category: {product.categoryLabel ?? (product.category ? product.category : "—")}
                         </span>
                         <span className="admin-table__muted">
                           Colors: {product.colors?.length ? product.colors.join(", ") : "—"}

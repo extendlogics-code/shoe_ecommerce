@@ -7,8 +7,7 @@ export type PrimaryNavItem = {
 
 export const primaryNav: PrimaryNavItem[] = [
   { label: "New Products", path: "/new-products" },
-  { label: "Collections", path: "/products" },
-  { label: "Sale", path: "/products?category=street", accent: true }
+  { label: "Collections", path: "/products" }
 ];
 
 export const quickLinks = [

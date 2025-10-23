@@ -39,6 +39,96 @@ export const ensureDatabaseBootstrap = async () => {
 
     await client.query(
       `
+        CREATE TABLE IF NOT EXISTS product_categories (
+          id TEXT PRIMARY KEY,
+          label TEXT NOT NULL,
+          nav_label TEXT NOT NULL,
+          description TEXT NOT NULL,
+          sort_order INTEGER NOT NULL DEFAULT 100,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `
+    );
+
+    await client.query(
+      `
+        ALTER TABLE product_categories
+          ADD COLUMN IF NOT EXISTS nav_label TEXT NOT NULL DEFAULT '';
+      `
+    );
+
+    await client.query(
+      `
+        ALTER TABLE product_categories
+          ALTER COLUMN nav_label DROP DEFAULT;
+      `
+    );
+
+    await client.query(
+      `
+        ALTER TABLE product_categories
+          ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 100;
+      `
+    );
+
+    await client.query(
+      `
+        INSERT INTO product_categories (id, label, nav_label, description, sort_order)
+        VALUES
+          ('womens', 'Women', 'Women', 'Sculpted silhouettes with adaptive comfort for motion-filled days.', 10),
+          ('mens', 'Men', 'Men', 'Tailored classics engineered with modern cushioning stacks.', 20),
+          ('kids', 'Kids', 'Kids', 'Play-proof sneakers with intuitive straps and breathable knits.', 30)
+        ON CONFLICT (id) DO UPDATE
+        SET
+          label = EXCLUDED.label,
+          nav_label = EXCLUDED.nav_label,
+          description = EXCLUDED.description,
+          sort_order = EXCLUDED.sort_order,
+          updated_at = now()
+      `
+    );
+
+    await client.query(
+      `
+        DO $$
+        BEGIN
+          IF EXISTS (
+            SELECT 1
+            FROM information_schema.table_constraints
+            WHERE table_schema = current_schema()
+              AND table_name = 'products'
+              AND constraint_type = 'CHECK'
+              AND constraint_name = 'products_category_check'
+          ) THEN
+            ALTER TABLE products DROP CONSTRAINT products_category_check;
+          END IF;
+        END;
+        $$;
+      `
+    );
+
+    await client.query(
+      `
+        DO $$
+        BEGIN
+          BEGIN
+            ALTER TABLE products
+              ADD CONSTRAINT products_category_fkey
+              FOREIGN KEY (category)
+              REFERENCES product_categories(id)
+              ON UPDATE CASCADE
+              ON DELETE SET NULL;
+          EXCEPTION
+            WHEN duplicate_object THEN NULL;
+          END;
+        END;
+        $$;
+      `
+    );
+
+    await client.query(
+      `
         CREATE TABLE IF NOT EXISTS admin_users (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           email TEXT NOT NULL UNIQUE,

@@ -1430,8 +1430,9 @@ button {
   border-radius: 18px;
   border: 1px solid rgba(70, 46, 33, 0.12);
   background: var(--color-surface);
-  text-align: left;
+  text-align: center;
   display: grid;
+  place-items: center;
   gap: 8px;
   transition: border 0.2s ease, background 0.2s ease, transform 0.2s ease;
   cursor: pointer;

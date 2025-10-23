@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { CATEGORY_ORDER, WORKBENCH_CATEGORY_IDS, getCategoryMeta } from "../data/categoryMeta";
+import { withCategoryPresentation } from "../data/categoryMeta";
 import { formatCurrency } from "../utils/currency";
 
 const PLACEHOLDER_IMAGE = "https://dummyimage.com/640x800/e8dcd2/2e1b12&text=Kalaa+Product";
@@ -16,6 +16,9 @@ type ApiProduct = {
   imagePath: string | null;
   colors: string[];
   category: string | null;
+  categoryLabel?: string | null;
+  categoryNavLabel?: string | null;
+  categoryDescription?: string | null;
 };
 
 type ViewProduct = {
@@ -30,12 +33,22 @@ type ViewProduct = {
   categoryId: string;
 };
 
+type ApiCategory = {
+  id: string;
+  label: string;
+  navLabel: string;
+  description: string;
+  sortOrder: number;
+  total: number;
+};
+
 type ViewCategory = {
   id: string;
   label: string;
   description: string;
   heroImage: string;
   count: number;
+  sortOrder: number;
 };
 
 const resolveImagePath = (imagePath: string | null) => {
@@ -59,7 +72,13 @@ const formatBadge = (status: string) => {
 };
 
 const mapProduct = (product: ApiProduct): ViewProduct => {
-  const meta = getCategoryMeta(product.category);
+  const categoryPresentation = withCategoryPresentation({
+    id: product.category,
+    label: product.categoryLabel ?? null,
+    navLabel: product.categoryNavLabel ?? null,
+    description: product.categoryDescription ?? null
+  });
+
   return {
     id: product.id,
     name: product.name,
@@ -68,14 +87,15 @@ const mapProduct = (product: ApiProduct): ViewProduct => {
     image: resolveImagePath(product.imagePath),
     badge: formatBadge(product.status),
     colors: Array.isArray(product.colors) ? product.colors.filter(Boolean).length : 0,
-    categoryLabel: meta.label,
-    categoryId: meta.id
+    categoryLabel: categoryPresentation.label,
+    categoryId: categoryPresentation.id
   };
 };
 
 const ProductsPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [products, setProducts] = useState<ViewProduct[]>([]);
+  const [categoriesData, setCategoriesData] = useState<ApiCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -86,18 +106,37 @@ const ProductsPage = () => {
       try {
         setLoading(true);
         setError(null);
-        const response = await fetch("/api/products");
-        if (!response.ok) {
+
+        const [productsResponse, categoriesResponse] = await Promise.all([
+          fetch("/api/products"),
+          fetch("/api/products/categories")
+        ]);
+
+        if (!productsResponse.ok) {
           throw new Error("Unable to load products");
         }
-        const data = (await response.json()) as ApiProduct[];
+
+        if (!categoriesResponse.ok) {
+          throw new Error("Unable to load product categories");
+        }
+
+        const [productsPayload, categoriesPayload] = await Promise.all([
+          productsResponse.json() as Promise<ApiProduct[]>,
+          categoriesResponse.json() as Promise<ApiCategory[]>
+        ]);
+
         if (!cancelled) {
-          setProducts(data.map(mapProduct));
+          const mappedProducts = productsPayload
+            .map(mapProduct)
+            .filter((product) => product.categoryId !== "uncategorized");
+          setProducts(mappedProducts);
+          setCategoriesData(categoriesPayload);
         }
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "Unexpected error");
           setProducts([]);
+          setCategoriesData([]);
         }
       } finally {
         if (!cancelled) {
@@ -120,43 +159,46 @@ const ProductsPage = () => {
       counts.set(key, (counts.get(key) ?? 0) + 1);
     });
 
-    const ids = new Set<string>([
-      ...WORKBENCH_CATEGORY_IDS,
-      ...Array.from(counts.keys()).filter(Boolean)
-    ]);
+    const fromApi = categoriesData.map((category) => {
+      const presented = withCategoryPresentation(category);
+      return {
+        id: presented.id,
+        label: presented.label,
+        description: presented.description,
+        heroImage: presented.heroImage,
+        count: counts.get(presented.id) ?? category.total ?? 0,
+        sortOrder: category.sortOrder ?? 100
+      } satisfies ViewCategory;
+    });
 
-    if (!ids.size) {
-      ids.add("uncategorized");
+    // ensure categories referenced by products but missing from API still appear
+    products.forEach((product) => {
+      if (!fromApi.some((entry) => entry.id === product.categoryId)) {
+        const presented = withCategoryPresentation({ id: product.categoryId, label: product.categoryLabel });
+        fromApi.push({
+          id: presented.id,
+          label: presented.label,
+          description: presented.description,
+          heroImage: presented.heroImage,
+          count: counts.get(presented.id) ?? 0,
+          sortOrder: 200
+        });
+      }
+    });
+
+    const filtered = fromApi.filter((entry) => entry.id !== "uncategorized");
+
+    if (!filtered.length) {
+      return [];
     }
 
-    const list = Array.from(ids).map((id) => {
-      const meta = getCategoryMeta(id);
-      return {
-        id: meta.id,
-        label: meta.label,
-        description: meta.description,
-        heroImage: meta.heroImage,
-        count: counts.get(meta.id) ?? 0
-      };
+    return filtered.sort((a, b) => {
+      if (a.sortOrder !== b.sortOrder) {
+        return a.sortOrder - b.sortOrder;
+      }
+      return a.label.localeCompare(b.label);
     });
-
-    list.sort((a, b) => {
-      const indexA = CATEGORY_ORDER.indexOf(a.id);
-      const indexB = CATEGORY_ORDER.indexOf(b.id);
-      if (indexA === -1 && indexB === -1) {
-        return a.label.localeCompare(b.label);
-      }
-      if (indexA === -1) {
-        return 1;
-      }
-      if (indexB === -1) {
-        return -1;
-      }
-      return indexA - indexB;
-    });
-
-    return list;
-  }, [products]);
+  }, [categoriesData, products]);
 
   const categoryParam = searchParams.get("category");
 
@@ -234,9 +276,7 @@ const ProductsPage = () => {
             >
               <span>
                 {category.label}
-                {category.count ? <sup> {category.count}</sup> : null}
               </span>
-              <small>{category.description}</small>
             </button>
           ))}
         </nav>
