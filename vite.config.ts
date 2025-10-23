@@ -15,7 +15,7 @@ export default defineConfig({
             if (!res.headersSent) {
               res.writeHead(503, { "Content-Type": "application/json" });
             }
-            res.end(JSON.stringify({ message: "Admin API unavailable on http://localhost:4000" }));
+            res.end(JSON.stringify({ message: "Admin API unavailable on http://localhost:4001" }));
           });
         }
       },

@@ -5,6 +5,7 @@ import "../styles/customization.css";
 import "../styles/product-details.css";
 import { formatCurrency } from "../utils/currency";
 import { useCart } from "../context/CartContext";
+import { CATEGORY_ORDER, WORKBENCH_CATEGORY_IDS, getCategoryMeta } from "../data/categoryMeta";
 type CustomizationOption = {
   id: string;
   name: string;
@@ -39,6 +40,7 @@ type ApiProduct = {
   reserved: number | null;
   safetyStock: number | null;
   reorderPoint: number | null;
+  category: string | null;
   isCustomizable?: boolean;
   customizationOptions?: CustomizationOption[];
   angles?: string[];
@@ -64,6 +66,8 @@ type ViewProduct = {
   reserved: number | null;
   safetyStock: number | null;
   reorderPoint: number | null;
+  categoryId: string;
+  categoryLabel: string;
   createdAt?: string;
   isCustomizable?: boolean;
   customizationOptions?: CustomizationOption[];
@@ -72,36 +76,57 @@ type ViewProduct = {
   currentAngle?: number;
 };
 
+type CategoryFilter = {
+  id: string;
+  label: string;
+  count: number;
+};
+
 const PLACEHOLDER_IMAGE =
   "https://dummyimage.com/640x800/e8dcd2/2e1b12&text=Kalaa+Product";
 
-const mapToViewProduct = (product: ApiProduct): ViewProduct => ({
-  id: product.id,
-  sku: product.sku,
-  name: product.name,
-  price: product.price,
-  currency: product.currency ?? "INR",
-  image: product.imagePath ? `/${product.imagePath}` : PLACEHOLDER_IMAGE,
-  status: product.status,
-  colors: Array.isArray(product.colors) ? product.colors.filter(Boolean) : [],
-  sizes: Array.isArray(product.sizes) ? product.sizes.filter(Boolean) : [],
-  description: product.description,
-  productDetails: product.productDetails?.filter((entry) => entry && entry.trim().length) ?? null,
-  productStory: product.productStory ?? null,
-  materialInfo: product.materialInfo ?? null,
-  careInstructions: product.careInstructions?.filter((entry) => entry && entry.trim().length) ?? null,
-  features: product.features?.filter((entry) => entry && entry.trim().length) ?? null,
-  onHand: product.onHand ?? null,
-  reserved: product.reserved ?? null,
-  safetyStock: product.safetyStock ?? null,
-  reorderPoint: product.reorderPoint ?? null,
-  createdAt: product.createdAt,
-  isCustomizable: product.isCustomizable ?? false,
-  customizationOptions: product.customizationOptions ?? [],
-  angles: product.angles ?? [],
-  currentCustomizations: {},
-  currentAngle: 0
-});
+const resolveImagePath = (imagePath: string | null) => {
+  if (!imagePath) {
+    return PLACEHOLDER_IMAGE;
+  }
+  if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
+    return imagePath;
+  }
+  return imagePath.startsWith("/") ? imagePath : `/${imagePath}`;
+};
+
+const mapToViewProduct = (product: ApiProduct): ViewProduct => {
+  const meta = getCategoryMeta(product.category);
+  return {
+    id: product.id,
+    sku: product.sku,
+    name: product.name,
+    price: product.price,
+    currency: product.currency ?? "INR",
+    image: resolveImagePath(product.imagePath),
+    status: product.status,
+    colors: Array.isArray(product.colors) ? product.colors.filter(Boolean) : [],
+    sizes: Array.isArray(product.sizes) ? product.sizes.filter(Boolean) : [],
+    description: product.description,
+    productDetails: product.productDetails?.filter((entry) => entry && entry.trim().length) ?? null,
+    productStory: product.productStory ?? null,
+    materialInfo: product.materialInfo ?? null,
+    careInstructions: product.careInstructions?.filter((entry) => entry && entry.trim().length) ?? null,
+    features: product.features?.filter((entry) => entry && entry.trim().length) ?? null,
+    onHand: product.onHand ?? null,
+    reserved: product.reserved ?? null,
+    safetyStock: product.safetyStock ?? null,
+    reorderPoint: product.reorderPoint ?? null,
+    categoryId: meta.id,
+    categoryLabel: meta.label,
+    createdAt: product.createdAt,
+    isCustomizable: product.isCustomizable ?? false,
+    customizationOptions: product.customizationOptions ?? [],
+    angles: product.angles ?? [],
+    currentCustomizations: {},
+    currentAngle: 0
+  };
+};
 
 const NewProductsPage = () => {
   const [loading, setLoading] = useState(true);
@@ -116,6 +141,7 @@ const NewProductsPage = () => {
   const [customizations, setCustomizations] = useState<Record<string, string>>({});
   const [currentAngle, setCurrentAngle] = useState(0);
   const [totalPrice, setTotalPrice] = useState(0);
+  const [activeCategory, setActiveCategory] = useState<string>("all");
   const navigate = useNavigate();
   const { addItem } = useCart();
 
@@ -142,6 +168,7 @@ const NewProductsPage = () => {
         if (!cancelled) {
           const mapped = data.map((product) => mapToViewProduct(product));
           setProducts(mapped);
+          setActiveCategory("all");
           setSelectedProduct(null);
           setSelectedSize(null);
           setSizeError(null);
@@ -167,6 +194,60 @@ const NewProductsPage = () => {
       cancelled = true;
     };
   }, []);
+
+  const categoryFilters = useMemo<CategoryFilter[]>(() => {
+    const counts = new Map<string, number>();
+    products.forEach((product) => {
+      const key = product.categoryId;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    });
+
+    const ids = new Set<string>([
+      ...WORKBENCH_CATEGORY_IDS,
+      ...Array.from(counts.keys()).filter(Boolean)
+    ]);
+
+    if (!ids.size) {
+      ids.add("uncategorized");
+    }
+
+    const ordered = Array.from(ids).sort((a, b) => {
+      const indexA = CATEGORY_ORDER.indexOf(a);
+      const indexB = CATEGORY_ORDER.indexOf(b);
+      if (indexA === -1 && indexB === -1) {
+        return a.localeCompare(b);
+      }
+      if (indexA === -1) {
+        return 1;
+      }
+      if (indexB === -1) {
+        return -1;
+      }
+      return indexA - indexB;
+    });
+
+    return ordered.map((id) => {
+      const meta = getCategoryMeta(id);
+      return {
+        id: meta.id,
+        label: meta.label,
+        count: counts.get(meta.id) ?? 0
+      };
+    });
+  }, [products]);
+
+  useEffect(() => {
+    if (activeCategory !== "all" && !categoryFilters.some((category) => category.id === activeCategory)) {
+      setActiveCategory("all");
+    }
+  }, [activeCategory, categoryFilters]);
+
+  const displayedProducts = useMemo(() => {
+    if (activeCategory === "all") {
+      return products;
+    }
+    return products.filter((product) => product.categoryId === activeCategory);
+  }, [activeCategory, products]);
 
   const openProduct = (product: ViewProduct) => {
     setSelectedProduct(product);
@@ -311,35 +392,72 @@ const NewProductsPage = () => {
         {loading ? <div className="surface new-products-page__loader">Loading new releases…</div> : null}
 
         {!loading && !error && !selectedProduct && products.length ? (
-          <section className="new-products-page__grid">
-            {products.map((product) => (
-              <article key={product.id} className="product-card surface">
+          <>
+            <nav className="new-products-page__filters" aria-label="Filter new products by category">
+              <button
+                type="button"
+                className={clsx(
+                  "new-products-page__filter",
+                  activeCategory === "all" && "new-products-page__filter--active"
+                )}
+                onClick={() => setActiveCategory("all")}
+              >
+                <span>All</span>
+                <small>{products.length} styles</small>
+              </button>
+              {categoryFilters.map((category) => (
                 <button
+                  key={category.id}
                   type="button"
-                  className="new-products-page__card-button"
-                  onClick={() => openProduct(product)}
+                  className={clsx(
+                    "new-products-page__filter",
+                    activeCategory === category.id && "new-products-page__filter--active"
+                  )}
+                  onClick={() => setActiveCategory(category.id)}
                 >
-                  <figure className="product-card__media">
-                    <span className="badge">{product.status === "active" ? "New" : product.status}</span>
-                    <img src={product.image} alt={product.name} loading="lazy" />
-                  </figure>
-                  <div className="product-card__info">
-                    <div>
-                      <h3>{product.name}</h3>
-                    </div>
-                    <div className="product-card__meta">
-                      <span className="product-card__price">{formatCurrency(product.price, product.currency)}</span>
-                      {product.colors.length ? (
-                        <small className="new-products-page__colors">
-                          Shades: {product.colors.join(", ")}
-                        </small>
-                      ) : null}
-                    </div>
-                  </div>
+                  <span>{category.label}</span>
+                  <small>{category.count ? `${category.count} styles` : "No products yet"}</small>
                 </button>
-              </article>
-            ))}
-          </section>
+              ))}
+            </nav>
+
+            <section className="new-products-page__grid">
+              {displayedProducts.map((product) => (
+                <article key={product.id} className="product-card surface">
+                  <button
+                    type="button"
+                    className="new-products-page__card-button"
+                    onClick={() => openProduct(product)}
+                  >
+                    <figure className="product-card__media">
+                      <span className="badge">{product.status === "active" ? "New" : product.status}</span>
+                      <img src={product.image} alt={product.name} loading="lazy" />
+                    </figure>
+                    <div className="product-card__info">
+                      <div>
+                        <h3>{product.name}</h3>
+                        <small className="new-products-page__category">{product.categoryLabel}</small>
+                      </div>
+                      <div className="product-card__meta">
+                        <span className="product-card__price">{formatCurrency(product.price, product.currency)}</span>
+                        {product.colors.length ? (
+                          <small className="new-products-page__colors">
+                            Shades: {product.colors.join(", ")}
+                          </small>
+                        ) : null}
+                      </div>
+                    </div>
+                  </button>
+                </article>
+              ))}
+              {!displayedProducts.length ? (
+                <div className="new-products-page__empty">
+                  <h2>No products yet for this category.</h2>
+                  <p>Publish a new SKU in the Product Workbench to showcase it here instantly.</p>
+                </div>
+              ) : null}
+            </section>
+          </>
         ) : null}
 
         {!loading && !error && selectedProduct ? (
@@ -348,8 +466,9 @@ const NewProductsPage = () => {
               <button type="button" className="button button--ghost" onClick={showAllProducts}>
                 ← Back to new products
               </button>
-              <span className="eyebrow">New product spotlight</span>
+              <span className="eyebrow">{selectedProduct.categoryLabel}</span>
               <h2 id="new-product-detail-title">{selectedProduct.name}</h2>
+              <p className="new-products-page__sku">SKU {selectedProduct.sku}</p>
             </header>
             <div className="new-products-page__detail-grid">
               <figure>

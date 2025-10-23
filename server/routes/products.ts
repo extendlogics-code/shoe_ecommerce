@@ -3,7 +3,15 @@ import multer from "multer";
 import path from "node:path";
 import { appConfig } from "../config";
 import { ensureDirectory } from "../utils/fileSystem";
-import { createProduct, deleteProductById, listProducts, listRecentProducts, updateProduct } from "../services/productService";
+import {
+  createProduct,
+  deleteProductById,
+  getProductById,
+  listProductCategories,
+  listProducts,
+  listRecentProducts,
+  updateProduct
+} from "../services/productService";
 
 const router = Router();
 
@@ -44,9 +52,10 @@ const ensureSuperadmin = (req: Request, res: Response): boolean => {
   return true;
 };
 
-router.get("/", async (_req, res, next) => {
+router.get("/", async (req, res, next) => {
   try {
-    const products = await listProducts();
+    const category = typeof req.query.category === "string" ? req.query.category : undefined;
+    const products = await listProducts(category);
     res.json(products);
   } catch (error) {
     next(error);
@@ -59,6 +68,28 @@ router.get("/new", async (req, res, next) => {
     const limit = Number.isNaN(limitParam) ? 12 : Math.max(1, Math.min(limitParam, 50));
     const products = await listRecentProducts(limit);
     res.json(products);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/categories", async (_req, res, next) => {
+  try {
+    const categories = await listProductCategories();
+    res.json(categories);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/:productId", async (req, res, next) => {
+  try {
+    const product = await getProductById(req.params.productId);
+    if (!product) {
+      res.status(404).json({ message: "Product not found" });
+      return;
+    }
+    res.json(product);
   } catch (error) {
     next(error);
   }

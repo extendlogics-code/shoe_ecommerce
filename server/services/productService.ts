@@ -187,11 +187,7 @@ export const createProduct = async (input: ProductInput) => {
   }
 };
 
-export const listProducts = async () => {
-  const client = await getClient();
-  try {
-    const { rows } = await client.query(
-      `
+const productSelect = `
         SELECT
           p.id,
           p.name,
@@ -216,9 +212,23 @@ export const listProducts = async () => {
           i.reorder_point AS "reorderPoint"
         FROM products p
         LEFT JOIN inventory_items i ON i.product_id = p.id
-        ORDER BY p.created_at DESC
-      `
-    );
+`;
+
+export const listProducts = async (category?: string) => {
+  const client = await getClient();
+  try {
+    const values: unknown[] = [];
+    let whereClause = "";
+    if (category) {
+      values.push(category);
+      whereClause = `WHERE p.category = $${values.length}`;
+    }
+    const query = `
+      ${productSelect}
+      ${whereClause}
+      ORDER BY p.created_at DESC
+    `;
+    const { rows } = await client.query(query, values);
     return rows;
   } finally {
     client.release();
@@ -246,6 +256,7 @@ export const listRecentProducts = async (limit = 12) => {
           p.image_primary_path AS "imagePath",
           COALESCE(p.colorways, '{}'::text[]) AS "colors",
           COALESCE(p.size_scale, '{}'::text[]) AS "sizes",
+          p.category,
           p.created_at AS "createdAt",
           i.on_hand AS "onHand",
           i.reserved AS "reserved",
@@ -276,6 +287,49 @@ export const deleteProductById = async (productId: string) => {
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
+  } finally {
+    client.release();
+  }
+};
+
+export const getProductById = async (productId: string) => {
+  const client = await getClient();
+  try {
+    const { rows } = await client.query(
+      `
+        ${productSelect}
+        WHERE p.id = $1
+      `,
+      [productId]
+    );
+    return rows[0] ?? null;
+  } finally {
+    client.release();
+  }
+};
+
+export interface ProductCategorySummary {
+  category: string;
+  total: number;
+  latest: Date | null;
+}
+
+export const listProductCategories = async () => {
+  const client = await getClient();
+  try {
+    const { rows } = await client.query<ProductCategorySummary>(
+      `
+        SELECT
+          category,
+          COUNT(*)::integer AS total,
+          MAX(created_at) AS latest
+        FROM products
+        WHERE category IS NOT NULL
+        GROUP BY category
+        ORDER BY category
+      `
+    );
+    return rows;
   } finally {
     client.release();
   }

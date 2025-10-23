@@ -1,24 +1,120 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { IconMenu2, IconSearch, IconShoppingBag, IconUser, IconX } from "@tabler/icons-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { primaryNav } from "../data/navigation";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { useCart } from "../context/CartContext";
+import { CATEGORY_ORDER, WORKBENCH_CATEGORY_IDS, getCategoryMeta } from "../data/categoryMeta";
+
+type ApiCategorySummary = {
+  category: string | null;
+  total: number;
+};
+
+type NavItem = {
+  label: string;
+  path: string;
+  accent?: boolean;
+  categoryId?: string;
+};
+
+const buildCategoryNavItems = (categories: string[]): NavItem[] => {
+  const unique = Array.from(
+    new Set(
+      categories
+        .filter((value): value is string => Boolean(value))
+        .map((value) => value.trim().toLowerCase())
+        .filter(Boolean)
+    )
+  );
+
+  unique.sort((a, b) => {
+    const indexA = CATEGORY_ORDER.indexOf(a);
+    const indexB = CATEGORY_ORDER.indexOf(b);
+    if (indexA === -1 && indexB === -1) {
+      return a.localeCompare(b);
+    }
+    if (indexA === -1) {
+      return 1;
+    }
+    if (indexB === -1) {
+      return -1;
+    }
+    return indexA - indexB;
+  });
+
+  return unique.map((id) => {
+    const meta = getCategoryMeta(id);
+    return {
+      label: meta.navLabel,
+      path: `/products?category=${meta.id}`,
+      categoryId: meta.id
+    };
+  });
+};
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [categoryNav, setCategoryNav] = useState<NavItem[]>(() => buildCategoryNavItems(WORKBENCH_CATEGORY_IDS));
   const { totalItems } = useCart();
   const location = useLocation();
   const navigate = useNavigate();
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        const response = await fetch("/api/products/categories");
+        if (!response.ok) {
+          if (!cancelled) {
+            setCategoryNav(buildCategoryNavItems(WORKBENCH_CATEGORY_IDS));
+          }
+          return;
+        }
+
+        const data = (await response.json()) as ApiCategorySummary[];
+        if (cancelled) {
+          return;
+        }
+        const ids = [
+          ...WORKBENCH_CATEGORY_IDS,
+          ...data.map((entry) => entry.category).filter((value): value is string => Boolean(value))
+        ];
+        setCategoryNav(buildCategoryNavItems(ids));
+      } catch {
+        if (!cancelled) {
+          setCategoryNav(buildCategoryNavItems(WORKBENCH_CATEGORY_IDS));
+        }
+      }
+    };
+
+    void load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const navItems = useMemo(
     () =>
-      primaryNav.map((item) => ({
-        ...item,
-        path: item.path ?? `/products?category=${item.categoryId ?? "women"}`
-      })),
-    []
+      primaryNav.reduce<NavItem[]>((acc, item, index) => {
+        const mapped: NavItem = {
+          label: item.label,
+          accent: item.accent,
+          categoryId: item.categoryId,
+          path: item.path ?? (item.categoryId ? `/products?category=${item.categoryId}` : "/products")
+        };
+
+        if (index === 0) {
+          acc.push(mapped, ...categoryNav);
+        } else {
+          acc.push(mapped);
+        }
+        return acc;
+      }, []),
+    [categoryNav]
   );
 
   const handleNavClick = (path: string) => {
