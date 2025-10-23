@@ -73,7 +73,24 @@ The same flow is available by transaction ID (`/api/orders/transaction/:transact
 | `GET` | `/api/orders/:orderId/invoice` | Streams the latest invoice PDF for download. |
 | `GET` | `/api/orders/transaction/:transactionId` | Fetch a single order payload by payment transaction. |
 | `GET` | `/api/products` | Catalog + inventory snapshot for the Product Workbench page. |
+| `GET` | `/api/products/new` | “New Arrivals” dataset used by the storefront teaser modal. |
+| `GET` | `/api/products/:id` | Full product graph for PDP hydration (colourways, size scale, angles). |
 | `POST` | `/api/products` | Handles multipart upload, stores imagery, and initialises inventory with an event trail. |
+| `POST` | `/api/products/:productId/media` | Adds gallery media to an existing product. |
+| `PUT` | `/api/products/:id` | Updates merchandising copy, pricing, or stock positions. |
+| `DELETE` | `/api/products/:id` | Removes a product and associated inventory + media. |
+
+## Product Intake Flow
+
+1. **Upload** – `POST /api/products` ingests the admin form payload, saves source imagery, and seeds `products`, `product_media`, and `inventory_items`.
+2. **Snapshot** – The Product Workbench re-hydrates via `GET /api/products`, which returns derived stock counts, variant availability, and presentation metadata.
+3. **Promotion** – Storefront listings (category grid, new arrivals, PDP) consume `/api/products`, `/api/products/new`, and `/api/products/:id`, presenting variant selectors (sizes, colourways) and badge copy straight from the database.
+
+## Order → Inventory Flow
+
+1. **Checkout** – `POST /api/orders` records `orders`, `order_items`, and `payments` in a single transaction, while `inventory_items` quantities are adjusted and `inventory_events` are written with contextual deltas.
+2. **Status Changes** – `PATCH /api/orders/:id/status` writes `order_events` timelines that the admin dashboard surfaces to operators.
+3. **Fulfilment / Cancellation** – Downstream operations call update endpoints that either decrement reserved stock (fulfilment) or restock inventory with matching `inventory_events` tagged `RESTOCK`, keeping the ledger balanced for analytics.
 
 ## Next Steps
 

@@ -35,3 +35,19 @@ This project uses PostgreSQL as the backing store for catalogue, inventory, orde
 - `product_media.product_id` → `products.id` (cascade on delete).
 
 All relationships enforce referential integrity with `ON DELETE CASCADE` where it makes sense to clean up dependent rows automatically (e.g., removing an order deletes its line items, events, payments, and invoice). Use these pointers when designing joins or extending the schema with reporting tables.
+
+## End-to-End Product Lifecycle
+
+1. **Create** – Admins upload a product from `/admin/catalog`. The API stores media under `uploads/products`, inserts a `products` record (colourways, size scale, merchandising copy), creates a matching `inventory_items` row, and appends an `inventory_events` entry tagged `INITIAL_STOCK`.
+2. **Merchandise** – Storefront pages (`/products`, `/products/new`, individual detail views) read directly from `products` and `product_media`, deriving category presentation and surfacing size/colour selections client-side.
+3. **Update** – Edits keep the SKU stable, updating `products` columns in place while mutating `inventory_items` and writing adjustment events so history is preserved.
+4. **Retire** – Deletions cascade, ensuring residual media, stock snapshots, order links, and events are cleaned up automatically.
+
+## End-to-End Order Lifecycle
+
+1. **Checkout** – The storefront creates an order via `POST /api/orders`, inserting into `orders`, `order_items`, and `payments` while decrementing inventory and logging matched `inventory_events`.
+2. **Fulfilment Tracking** – Each status change (`PATCH /api/orders/:id/status`) appends an `order_events` row, keeping the operational timeline auditable.
+3. **Billing** – Invoice requests create a PDF artifact, persist it under `uploads/invoices`, and upsert a row in `invoices` tied back to the order.
+4. **Reconciliation** – Admin dashboards query joins across `orders`, `order_items`, `payments`, `inventory_items`, and `invoices`, giving a complete customer, stock, and revenue snapshot from a single round trip.
+
+Use these flows as a reference when expanding downstream integrations (e.g., ERP ingestion, analytics pipelines, or third-party fulfilment webhooks).

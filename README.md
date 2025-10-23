@@ -7,8 +7,16 @@ Modern, responsive React implementation for a premium footwear storefront inspir
 - React 18 + Vite 5 + TypeScript for a fast, modern developer experience.
 - Fully responsive layout with adaptive grids, sticky header, animated hero carousel, and curated product rails.
 - Dedicated product listing, detail, cart, and checkout experiences tied together with client-side routing.
+- Variant-aware catalogue filters and PDP selectors – shoppers can filter by size/colour, and PDPs enforce the same combinations before adding to cart.
+- New Arrivals modal that mirrors admin-managed colourways, including colour-synced “Buy now” CTAs for leather drops.
 - Rich storytelling sections (collections, editorial stories, newsletter, brand ticker) aligned with the provided reference.
 - Motion primitives powered by Framer Motion and vector icons from Tabler Icons.
+
+## End-to-End Flow Highlights
+
+- **Merchandiser → Storefront** – Product Workbench updates immediately populate storefront grids, the New Arrivals feed, and PDP variant selectors (sizes, colourways, hero angles).
+- **Checkout → Inventory** – Order creation adjusts stock levels, writes inventory events, and feeds the admin dashboards without manual reconciliation.
+- **Billing Loop** – Invoice generation produces downloadable PDFs, records entries in Postgres, and keeps the order timeline up to date for the operations team.
 
 ## Getting Started
 
@@ -109,6 +117,7 @@ git push -u origin master
 - `docs/database.md` – canonical schema definition and bootstrap instructions.
 - `docs/database-overview.md` – quick reference for every table and its intent.
 - `docs/admin-dashboard.md` – walkthrough of admin login, dashboards, and supporting API endpoints.
+- `docs/dependencies.md` – npm modules in use with commands for targeted reinstalls.
 
 ## Security
 

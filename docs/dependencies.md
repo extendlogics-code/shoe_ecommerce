@@ -17,6 +17,7 @@ The project is bootstrapped with Vite + React + TypeScript and includes a lightw
 | `multer` | `npm install multer` | Multipart handling for product image uploads. |
 | `pdfkit` | `npm install pdfkit` | Invoice PDF generation. |
 | `bcryptjs` | `npm install bcryptjs` | Password hashing for admin accounts. |
+| `nodemailer` | `npm install nodemailer` | Transactional email transport used for admin alerts and order notifications. |
 
 ## Development Dependencies
 
