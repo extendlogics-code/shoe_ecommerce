@@ -11,7 +11,7 @@ const highlights = [
     id: "returns",
     icon: <IconCash size={20} stroke={1.8} />,
     title: "Risk-free try on",
-    subtitle: "Easy returns within 90 days with instant refund."
+    subtitle: "Easy returns within 30 days with instant refund."
   },
   {
     id: "materials",

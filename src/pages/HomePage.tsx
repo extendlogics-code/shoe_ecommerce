@@ -4,7 +4,6 @@ import HighlightsBar from "../components/HighlightsBar";
 import CollectionGrid from "../components/CollectionGrid";
 import ProductRail from "../components/ProductRail";
 import BrandTicker from "../components/BrandTicker";
-import StoryGrid from "../components/StoryGrid";
 import NewsletterBanner from "../components/NewsletterBanner";
 import { collectionCards, featuredProducts, newArrivals, type ProductSummary } from "../data/products";
 
@@ -132,18 +131,19 @@ const HomePage = () => {
         title="Latest arrivals redefining comfort"
         subtitle="Meticulously engineered silhouettes crafted with regenerative leathers, recycled knit uppers, and cloud-cushion midsoles."
         products={arrivals}
-        ctaLabel="Shop New In"
+        // ctaLabel="Shop New In"
       />
       <BrandTicker />
-      <ProductRail
-        id="featured"
-        eyebrow="Most loved"
-        title="Signature bestsellers"
-        subtitle="Pieces refined over seven iterations and thousands of fittings. Your rotation essentials, elevated."
-        products={featuredProducts}
-        ctaLabel="View the Icons"
-      />
-      <StoryGrid />
+      {/* {signatureProducts.length > 0 && (
+        <ProductRail
+          id="featured"
+          eyebrow="Most loved"
+          title="Signature bestsellers"
+          subtitle="Pieces refined over seven iterations and thousands of fittings. Your rotation essentials, elevated."
+          products={signatureProducts}
+          ctaLabel="View the Icons"
+        />
+      )} */}
       <NewsletterBanner />
     </main>
   );

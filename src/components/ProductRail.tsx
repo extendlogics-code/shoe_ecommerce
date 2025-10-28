@@ -23,10 +23,10 @@ const ProductRail = ({ id, title, subtitle, products, eyebrow, ctaLabel }: Props
             <h2>{title}</h2>
             <p>{subtitle}</p>
           </div>
-          <a href="#shop-all" className="button button--dark">
+          {/* <a href="#shop-all" className="button button--dark">
             {ctaLabel ?? "View All"}
             <IconArrowRight size={18} stroke={1.8} />
-          </a>
+          </a> */}
         </header>
 
         <div className="product-rail__grid">
