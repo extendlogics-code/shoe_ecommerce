@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getAdminSession, setAdminSession } from "../utils/adminSession";
+import { apiFetch } from "../utils/apiClient";
 
 const AdminLoginPage = () => {
   const [email, setEmail] = useState("");
@@ -29,7 +30,7 @@ const AdminLoginPage = () => {
     setError(null);
 
     try {
-      const response = await fetch("/api/admin/login", {
+      const response = await apiFetch("/api/admin/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -75,7 +76,7 @@ const AdminLoginPage = () => {
     }
 
     try {
-      const response = await fetch("/api/admin/register", {
+      const response = await apiFetch("/api/admin/register", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"

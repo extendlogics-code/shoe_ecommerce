@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { withCategoryPresentation } from "../data/categoryMeta";
 import { formatCurrency } from "../utils/currency";
+import { apiFetch } from "../utils/apiClient";
 
 const PLACEHOLDER_IMAGE = "https://dummyimage.com/640x800/e8dcd2/2e1b12&text=Kalaa+Product";
 
@@ -121,8 +122,8 @@ const ProductsPage = () => {
         setError(null);
 
         const [productsResponse, categoriesResponse] = await Promise.all([
-          fetch("/api/products"),
-          fetch("/api/products/categories")
+          apiFetch("/api/products"),
+          apiFetch("/api/products/categories")
         ]);
 
         if (!productsResponse.ok) {

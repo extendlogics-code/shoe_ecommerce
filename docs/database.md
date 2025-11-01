@@ -20,6 +20,18 @@ All tables—including constraints, triggers, and relationships—are codified i
 psql -U root -h localhost postgres -f server/schema.sql
 ```
 
+### Hosting on Supabase
+
+Supabase ships with a managed Postgres instance that is 100% compatible with the schema above. To deploy the database there:
+
+1. Create a Supabase project and grab the **connection string** from Settings → Database (`postgresql://...`).
+2. Run `psql` (or the Supabase SQL editor) with that connection string to execute `server/schema.sql`.
+3. Export `PG_CONNECTION_STRING` (or `SUPABASE_DB_URL`) in the backend environment. The Express API will automatically detect it and route all CRUD traffic through the Supabase database, including schema bootstrap on cold start.
+4. Because Supabase requires TLS, also set `PGSSLMODE=require`. If you are using a self-signed certificate, set `PGSSL_REJECT_UNAUTHORIZED=false`.
+5. When bundling the web or Android build, set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` so the client bundle can initialise the Supabase SDK where needed (e.g., realtime listeners or client-side reads).
+
+> Keep the service-role key on the server only. The frontend (web/Android) should continue to call the API for privileged mutations so Row Level Security rules stay intact.
+
 The schema enables:
 
 - UUID keys (via `pgcrypto`) to keep identifiers opaque

@@ -6,6 +6,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { useCart } from "../context/CartContext";
 import { DEFAULT_CATEGORY_ID, withCategoryPresentation } from "../data/categoryMeta";
+import { apiFetch } from "../utils/apiClient";
 
 type ApiCategorySummary = {
   id: string;
@@ -58,7 +59,7 @@ const Header = () => {
 
     const load = async () => {
       try {
-        const response = await fetch("/api/products/categories");
+        const response = await apiFetch("/api/products/categories");
         if (!response.ok) {
           if (!cancelled) {
             setCategoryNav(buildCategoryNavItems(DEFAULT_CATEGORIES));

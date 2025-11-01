@@ -3,6 +3,7 @@ import type { ChangeEvent, FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 import { formatCurrency } from "../utils/currency";
+import { apiFetch } from "../utils/apiClient";
 
 type FormState = {
   fullName: string;
@@ -177,7 +178,7 @@ const CheckoutPage = () => {
     setTransactionError(null);
 
     try {
-      const catalogResponse = await fetch("/api/products");
+      const catalogResponse = await apiFetch("/api/products");
       const catalog: Array<{
         id: string;
         sku: string;
@@ -245,7 +246,7 @@ const CheckoutPage = () => {
         status: "processing"
       };
 
-      const response = await fetch("/api/orders", {
+      const response = await apiFetch("/api/orders", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -266,7 +267,7 @@ const CheckoutPage = () => {
 
       const createdOrder = (await response.json()) as { id: string; transactionId: string };
 
-      await fetch(`/api/orders/transaction/${encodeURIComponent(completedOrder.transactionId)}/invoices`, {
+      await apiFetch(`/api/orders/transaction/${encodeURIComponent(completedOrder.transactionId)}/invoices`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"

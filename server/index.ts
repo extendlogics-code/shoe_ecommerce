@@ -1,4 +1,7 @@
+import cors from "cors";
 import express from "express";
+import rateLimit from "express-rate-limit";
+import helmet from "helmet";
 import ordersRouter from "./routes/orders";
 import productsRouter from "./routes/products";
 import adminAuthRouter from "./routes/adminAuth";
@@ -13,6 +16,42 @@ ensureDirectories([
 ]);
 
 const app = express();
+
+if (appConfig.security.trustProxy) {
+  app.set("trust proxy", 1);
+}
+
+app.disable("x-powered-by");
+
+app.use(
+  helmet({
+    contentSecurityPolicy: process.env.NODE_ENV === "production" ? undefined : false,
+    crossOriginEmbedderPolicy: false
+  })
+);
+
+const allowedOrigins = new Set(appConfig.security.corsAllowedOrigins);
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.has(origin)) {
+        return callback(null, true);
+      }
+      return callback(null, false);
+    },
+    credentials: true,
+    optionsSuccessStatus: 204
+  })
+);
+
+const apiLimiter = rateLimit({
+  windowMs: appConfig.security.rateLimitWindowMs,
+  max: appConfig.security.rateLimitMax,
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+app.use("/api/", apiLimiter);
 
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
@@ -29,7 +68,8 @@ app.get("/healthz", (_req, res) => {
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use((error: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(error);
-  res.status(500).json({ message: error.message });
+  const isProduction = process.env.NODE_ENV === "production";
+  res.status(500).json({ message: isProduction ? "Internal server error" : error.message });
 });
 
 const port = appConfig.port;

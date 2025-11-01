@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { formatCurrency } from "../utils/currency";
 import { clearAdminSession, getAdminSession } from "../utils/adminSession";
+import { apiFetch } from "../utils/apiClient";
 
 const ORDER_STATUS_VALUES = ["processing", "paid", "fulfilled", "cancelled", "refunded"] as const;
 
@@ -101,7 +102,7 @@ const OrdersDashboardPage = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch("/api/orders");
+      const response = await apiFetch("/api/orders");
       if (!response.ok) {
         let detail = "Unable to load orders";
         try {
@@ -163,7 +164,7 @@ const OrdersDashboardPage = () => {
       setError(null);
       setMessage(null);
       try {
-        const response = await fetch(`/api/orders/${orderId}/invoices`, {
+        const response = await apiFetch(`/api/orders/${orderId}/invoices`, {
           method: "POST",
           headers: {
             "X-Admin-Role": role ?? ""
@@ -232,7 +233,7 @@ const OrdersDashboardPage = () => {
       setError(null);
       setMessage(null);
       try {
-        const response = await fetch(`/api/orders/${order.id}/status`, {
+        const response = await apiFetch(`/api/orders/${order.id}/status`, {
           method: "PATCH",
           headers: {
             "Content-Type": "application/json",
@@ -280,7 +281,7 @@ const OrdersDashboardPage = () => {
       setError(null);
       setMessage(null);
       try {
-        const response = await fetch(`/api/orders/${order.id}`, {
+        const response = await apiFetch(`/api/orders/${order.id}`, {
           method: "DELETE",
           headers: {
             "X-Admin-Role": role ?? ""

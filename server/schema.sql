@@ -1,5 +1,15 @@
--- Enable UUID generation
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+-- Ensure tables create in public schema when running on Supabase
+SET search_path TO public;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_namespace WHERE nspname = 'extensions') THEN
+    EXECUTE 'CREATE EXTENSION IF NOT EXISTS "pgcrypto" WITH SCHEMA extensions';
+  ELSE
+    EXECUTE 'CREATE EXTENSION IF NOT EXISTS "pgcrypto"';
+  END IF;
+END;
+$$;
 
 -- Customers and addresses
 CREATE TABLE IF NOT EXISTS customers (
@@ -166,6 +176,15 @@ CREATE TABLE IF NOT EXISTS admin_users (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+DROP FUNCTION IF EXISTS set_updated_at();
+CREATE OR REPLACE FUNCTION set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 DROP TRIGGER IF EXISTS set_admin_users_updated_at ON admin_users;
 CREATE TRIGGER set_admin_users_updated_at
 BEFORE UPDATE ON admin_users
@@ -177,15 +196,6 @@ CREATE TRIGGER set_product_categories_updated_at
 BEFORE UPDATE ON product_categories
 FOR EACH ROW
 EXECUTE FUNCTION set_updated_at();
-
--- Trigger to keep customer.updated_at in sync
-CREATE OR REPLACE FUNCTION set_updated_at()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = now();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
 
 DROP TRIGGER IF EXISTS set_customers_updated_at ON customers;
 CREATE TRIGGER set_customers_updated_at
@@ -211,3 +221,73 @@ ALTER TABLE IF EXISTS products
 
 ALTER TABLE IF EXISTS products
   ADD COLUMN IF NOT EXISTS size_scale TEXT[] NOT NULL DEFAULT '{}'::text[];
+
+-- ---------------------------------------------------------------------------
+-- Supabase integration helpers
+-- ---------------------------------------------------------------------------
+
+-- Allow API roles to read catalog tables via PostgREST
+GRANT USAGE ON SCHEMA public TO postgres, anon, authenticated, service_role;
+
+GRANT SELECT ON TABLE product_categories TO anon, authenticated;
+GRANT SELECT ON TABLE products TO anon, authenticated;
+GRANT SELECT ON TABLE product_media TO anon, authenticated;
+
+-- Enable RLS for read-only exposure while allowing superuser/service connections
+ALTER TABLE product_categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE product_media ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_policies
+    WHERE schemaname = current_schema()
+      AND tablename = 'product_categories'
+      AND policyname = 'product_categories_public_read'
+  ) THEN
+    CREATE POLICY product_categories_public_read
+      ON product_categories
+      FOR SELECT
+      TO anon, authenticated
+      USING (TRUE);
+  END IF;
+END;
+$$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_policies
+    WHERE schemaname = current_schema()
+      AND tablename = 'products'
+      AND policyname = 'products_public_read'
+  ) THEN
+    CREATE POLICY products_public_read
+      ON products
+      FOR SELECT
+      TO anon, authenticated
+      USING (TRUE);
+  END IF;
+END;
+$$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_policies
+    WHERE schemaname = current_schema()
+      AND tablename = 'product_media'
+      AND policyname = 'product_media_public_read'
+  ) THEN
+    CREATE POLICY product_media_public_read
+      ON product_media
+      FOR SELECT
+      TO anon, authenticated
+      USING (TRUE);
+  END IF;
+END;
+$$;

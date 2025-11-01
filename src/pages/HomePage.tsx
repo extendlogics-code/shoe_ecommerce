@@ -6,6 +6,7 @@ import ProductRail from "../components/ProductRail";
 import BrandTicker from "../components/BrandTicker";
 import NewsletterBanner from "../components/NewsletterBanner";
 import { collectionCards, featuredProducts, newArrivals, type ProductSummary } from "../data/products";
+import { apiFetch } from "../utils/apiClient";
 
 type ApiProduct = {
   id: string;
@@ -42,8 +43,8 @@ const HomePage = () => {
     const load = async () => {
       try {
         const [ordersResponse, productsResponse] = await Promise.all([
-          fetch("/api/orders"),
-          fetch("/api/products")
+          apiFetch("/api/orders"),
+          apiFetch("/api/products")
         ]);
 
         if (!ordersResponse.ok || !productsResponse.ok) {

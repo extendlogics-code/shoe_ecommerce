@@ -6,6 +6,7 @@ import "../styles/product-details.css";
 import { formatCurrency } from "../utils/currency";
 import { useCart } from "../context/CartContext";
 import { DEFAULT_CATEGORY_ID, withCategoryPresentation } from "../data/categoryMeta";
+import { apiFetch } from "../utils/apiClient";
 
 type ApiCategorySummary = {
   id: string;
@@ -223,7 +224,7 @@ const NewProductsPage = () => {
       setLoading(true);
       setError(null);
       try {
-        const response = await fetch("/api/products/new");
+        const response = await apiFetch("/api/products/new");
         if (!response.ok) {
           let detail = "Unable to load new products.";
           try {
@@ -271,7 +272,7 @@ const NewProductsPage = () => {
 
     const loadCategories = async () => {
       try {
-        const response = await fetch("/api/products/categories");
+        const response = await apiFetch("/api/products/categories");
         if (!response.ok) {
           if (!cancelled) {
             setCategoriesData([]);

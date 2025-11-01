@@ -8,19 +8,19 @@ export default defineConfig({
     open: true,
     proxy: {
       "/api": {
-        target: "http://localhost:4001",
+        target: "http://localhost:4000",
         changeOrigin: true,
         configure: (proxy) => {
           proxy.on("error", (_err, _req, res) => {
             if (!res.headersSent) {
               res.writeHead(503, { "Content-Type": "application/json" });
             }
-            res.end(JSON.stringify({ message: "Admin API unavailable on http://localhost:4001" }));
+            res.end(JSON.stringify({ message: "Admin API unavailable on http://localhost:4000" }));
           });
         }
       },
       "/uploads": {
-        target: "http://localhost:4001",
+        target: "http://localhost:4000",
         changeOrigin: true,
         configure: (proxy) => {
           proxy.on("error", (_err, _req, res) => {

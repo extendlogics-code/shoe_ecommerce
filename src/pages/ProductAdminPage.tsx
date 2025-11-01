@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { formatCurrency } from "../utils/currency";
 import { DEFAULT_CATEGORY_ID, withCategoryPresentation } from "../data/categoryMeta";
 import { clearAdminSession, getAdminSession } from "../utils/adminSession";
+import { apiFetch } from "../utils/apiClient";
 
 type ProductRow = {
   id: string;
@@ -118,7 +119,7 @@ const ProductAdminPage = () => {
     setError(null);
 
     try {
-      const response = await fetch("/api/products");
+      const response = await apiFetch("/api/products");
       if (!response.ok) {
         let detail = "Unable to load products";
         try {
@@ -140,7 +141,7 @@ const ProductAdminPage = () => {
 
   const loadCategories = useCallback(async () => {
     try {
-      const response = await fetch("/api/products/categories");
+      const response = await apiFetch("/api/products/categories");
       if (!response.ok) {
         throw new Error("Unable to load categories");
       }
@@ -293,7 +294,7 @@ const ProductAdminPage = () => {
       }
 
       const endpoint = isEditingProduct ? `/api/products/${editingProductId}` : "/api/products";
-      const response = await fetch(endpoint, {
+      const response = await apiFetch(endpoint, {
         method: isEditingProduct ? "PUT" : "POST",
         body: formData,
         headers: {
@@ -342,7 +343,7 @@ const ProductAdminPage = () => {
       setEditingProductId(null);
       setEditingProductStatus("active");
         }
-        const response = await fetch(`/api/products/${productId}`, {
+        const response = await apiFetch(`/api/products/${productId}`, {
           method: "DELETE",
           headers: {
             "X-Admin-Role": role ?? ""
@@ -438,7 +439,7 @@ const ProductAdminPage = () => {
     }
 
     try {
-      const response = await fetch("/api/admin/users", {
+      const response = await apiFetch("/api/admin/users", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"

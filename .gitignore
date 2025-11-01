@@ -1,0 +1,2 @@
+# Ignore SDK/JDK bundles copied into the workspace
+android_workspace/jdk-*/
